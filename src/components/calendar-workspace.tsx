@@ -399,7 +399,7 @@ export function CalendarWorkspace() {
         {selectedTasks.length === 0 ? (
           <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
-          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
             {selectedTasks.map((task) => (
               <TaskDetailCard key={task.id} task={task} userById={userById} />
             ))}
