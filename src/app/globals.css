@@ -29,27 +29,8 @@ select {
 }
 
 .workspace {
+  background: var(--background);
   min-height: 100dvh;
-}
-
-.workspace-sider {
-  border-right: 1px solid #e7ebf3;
-  box-shadow: 8px 0 24px rgba(33, 43, 67, 0.03);
-  height: 100dvh;
-  padding: 18px 16px;
-  position: sticky !important;
-  top: 0;
-}
-
-.workspace-sider .ant-layout-sider-children {
-  min-height: 0;
-}
-
-.sidebar-frame {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
 }
 
 .brand {
@@ -85,35 +66,11 @@ select {
   margin-top: 3px;
 }
 
-.side-menu {
-  border-inline-end: 0 !important;
-  flex: 0 0 auto;
-}
-
-.sidebar-footer {
-  margin-top: auto;
-  min-height: 0;
-}
-
-.account-panel {
-  background: #ffffff;
-  border: 1px solid #edf0f6;
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(20, 30, 50, 0.06);
-  padding: 14px;
-}
-
 .task-dot {
   border-radius: 999px;
   display: inline-block;
   height: 8px;
   width: 8px;
-}
-
-.account-panel {
-  align-items: center;
-  display: flex;
-  gap: 10px;
 }
 
 .account-name {
@@ -125,6 +82,29 @@ select {
   color: #6b7280;
   font-size: 12px;
   margin-top: 2px;
+}
+
+.account-management-list {
+  border: 1px solid #edf0f6;
+  border-radius: 8px;
+  display: grid;
+  gap: 0;
+  margin-bottom: 18px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.account-management-row {
+  align-items: center;
+  border-bottom: 1px solid #edf0f6;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.account-management-row:last-child {
+  border-bottom: 0;
 }
 
 .workspace-main {
@@ -146,8 +126,27 @@ select {
   border-bottom: 1px solid #e7ebf3;
   display: flex;
   justify-content: space-between;
-  min-height: 76px;
+  min-height: 82px;
   padding: 14px 24px;
+}
+
+.topbar-left {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  min-width: 0;
+}
+
+.topbar-brand {
+  border-right: 1px solid #e7ebf3;
+  flex: 0 0 auto;
+  height: auto;
+  margin-bottom: 0;
+  padding-right: 20px;
+}
+
+.topbar-title {
+  min-width: 0;
 }
 
 .topbar-actions {
@@ -669,14 +668,21 @@ code {
     display: block;
   }
 
-  .workspace-sider {
-    display: none;
-  }
-
   .topbar {
     align-items: flex-start;
     flex-direction: column;
     gap: 14px;
+  }
+
+  .topbar-left {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .topbar-brand {
+    border-right: 0;
+    padding-right: 0;
   }
 
   .content-grid {

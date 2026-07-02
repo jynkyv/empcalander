@@ -41,6 +41,7 @@ const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
 const currentUserId = "u-admin";
+const currentUserRole: CalendarUser["role"] = "admin";
 
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -249,6 +250,7 @@ export function CalendarWorkspace() {
     monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
   const sentMonthCount = monthTasks.filter(isSentTask).length;
   const receivedMonthCount = monthTasks.filter(isReceivedTask).length;
+  const canManageAccounts = currentUserRole === "admin";
 
   const openTaskModal = (date = selectedDate) => {
     taskForm.setFieldsValue({
@@ -310,9 +312,11 @@ export function CalendarWorkspace() {
     <WorkspaceShell
       actions={
         <Space size={12} wrap>
-          <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
-            开账号
-          </Button>
+          {canManageAccounts ? (
+            <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
+              账号管理
+            </Button>
+          ) : null}
           <Button
             icon={<PlusOutlined />}
             onClick={() => openTaskModal()}
@@ -483,8 +487,22 @@ export function CalendarWorkspace() {
         onCancel={() => setMemberModalOpen(false)}
         onOk={() => memberForm.submit()}
         open={memberModalOpen}
-        title="开员工账号"
+        title="账号管理"
       >
+        <div className="account-management-list">
+          {users.map((user) => (
+            <div className="account-management-row" key={user.id}>
+              <Avatar style={{ backgroundColor: user.color }}>{initials(user.name)}</Avatar>
+              <div>
+                <div className="account-name">{user.name}</div>
+                <Text type="secondary">{user.email}</Text>
+              </div>
+              <Tag color={user.role === "admin" ? "blue" : "default"}>
+                {user.role === "admin" ? "管理员" : "员工"}
+              </Tag>
+            </div>
+          ))}
+        </div>
         <Form
           form={memberForm}
           initialValues={{ role: "member" }}
