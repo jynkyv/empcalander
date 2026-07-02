@@ -80,6 +80,14 @@ function startOfCalendarMonth(month: Dayjs) {
   return firstDay.subtract(offset, "day");
 }
 
+function endOfCalendarMonth(month: Dayjs) {
+  const lastDay = month.endOf("month").startOf("day");
+  const weekday = lastDay.day();
+  const offset = weekday === 0 ? 0 : 7 - weekday;
+
+  return lastDay.add(offset, "day");
+}
+
 function endOfTask(task: CalendarTask) {
   return dayjs(task.endsAt || task.startsAt);
 }
@@ -159,8 +167,10 @@ export function CalendarWorkspace() {
 
   const calendarWeeks = useMemo(() => {
     const start = startOfCalendarMonth(calendarValue);
+    const end = endOfCalendarMonth(calendarValue);
+    const weekCount = Math.ceil((end.diff(start, "day") + 1) / 7);
 
-    return Array.from({ length: 6 }, (_, weekIndex) =>
+    return Array.from({ length: weekCount }, (_, weekIndex) =>
       Array.from({ length: 7 }, (_, dayIndex) =>
         start.add(weekIndex * 7 + dayIndex, "day"),
       ),
@@ -263,7 +273,7 @@ export function CalendarWorkspace() {
       }
       title="日历"
     >
-      <div className="content-grid">
+      <div className="content-grid calendar-content-grid">
         <section className="calendar-panel">
           <div className="calendar-header">
             <Flex align="center" gap={10}>
@@ -471,6 +481,8 @@ function MonthRangeCalendar({
   userById: Map<string, CalendarUser>;
   weeks: Dayjs[][];
 }) {
+  const visibleWeekEventCount = 2;
+
   return (
     <div className="range-calendar">
       <div className="range-calendar-weekdays">
@@ -517,7 +529,7 @@ function MonthRangeCalendar({
               })}
             </div>
             <div className="range-event-layer">
-              {weekTasks.slice(0, 4).map((task, index) => {
+              {weekTasks.slice(0, visibleWeekEventCount).map((task, index) => {
                 const segment = clampTaskToWeek(task, weekStart);
                 const owner = userById.get(task.assigneeIds[0]);
 
@@ -552,12 +564,12 @@ function MonthRangeCalendar({
                   </button>
                 );
               })}
-              {weekTasks.length > 4 ? (
-                <Text className="range-more-count" type="secondary">
-                  +{weekTasks.length - 4} 项
-                </Text>
-              ) : null}
             </div>
+            {weekTasks.length > visibleWeekEventCount ? (
+              <Text className="range-more-count" type="secondary">
+                +{weekTasks.length - visibleWeekEventCount} 项
+              </Text>
+            ) : null}
           </div>
         );
       })}
