@@ -247,31 +247,48 @@ select {
 }
 
 .range-calendar {
+  --calendar-day-font-size: 14px;
+  --calendar-day-padding-x: 14px;
+  --calendar-day-padding-y: 12px;
+  --calendar-event-font-size: 12px;
+  --calendar-event-gap: 4px;
+  --calendar-event-height: 22px;
+  --calendar-event-margin-x: 8px;
+  --calendar-event-top: 42px;
+  --calendar-today-size: 24px;
+  --calendar-week-height: 98px;
+  --calendar-weekday-font-size: 13px;
+  --calendar-weekday-height: 44px;
   background: #ffffff;
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  overflow: auto;
 }
 
 .range-calendar-weekdays {
+  align-items: center;
   border-bottom: 1px solid #eef2f7;
   color: #6b7280;
   display: grid;
-  font-size: 13px;
+  flex: 0 0 var(--calendar-weekday-height);
+  font-size: var(--calendar-weekday-font-size);
   font-weight: 650;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  height: var(--calendar-weekday-height);
 }
 
 .range-calendar-weekdays div {
-  padding: 12px 14px;
+  padding: 0 var(--calendar-day-padding-x);
   text-align: right;
 }
 
 .range-calendar-week {
   border-bottom: 1px solid #eef2f7;
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 var(--calendar-week-height);
+  height: var(--calendar-week-height);
+  min-height: var(--calendar-week-height);
   position: relative;
 }
 
@@ -282,8 +299,8 @@ select {
 .range-calendar-days {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  height: 100%;
-  min-height: 0;
+  height: var(--calendar-week-height);
+  min-height: var(--calendar-week-height);
 }
 
 .range-day {
@@ -294,9 +311,11 @@ select {
   color: #172033;
   cursor: pointer;
   display: flex;
+  font-size: var(--calendar-day-font-size);
   justify-content: flex-end;
+  line-height: var(--calendar-today-size);
   min-width: 0;
-  padding: 12px 14px;
+  padding: var(--calendar-day-padding-y) var(--calendar-day-padding-x);
   text-align: right;
 }
 
@@ -319,14 +338,14 @@ select {
 
 .range-event-layer {
   display: grid;
-  gap: 4px 0;
-  grid-auto-rows: 22px;
+  gap: var(--calendar-event-gap) 0;
+  grid-auto-rows: var(--calendar-event-height);
   grid-template-columns: repeat(7, minmax(0, 1fr));
   left: 0;
   pointer-events: none;
   position: absolute;
   right: 0;
-  top: 42px;
+  top: var(--calendar-event-top);
 }
 
 .range-event-bar {
@@ -337,10 +356,11 @@ select {
   color: #25324b;
   cursor: pointer;
   display: flex;
-  font-size: 12px;
+  font-size: var(--calendar-event-font-size);
   gap: 6px;
-  height: 22px;
-  margin: 0 8px;
+  height: var(--calendar-event-height);
+  line-height: var(--calendar-event-height);
+  margin: 0 var(--calendar-event-margin-x);
   min-width: 0;
   overflow: hidden;
   padding: 0 8px;
@@ -397,6 +417,10 @@ select {
   z-index: 1;
 }
 
+.range-event-bar .task-dot {
+  flex: 0 0 8px;
+}
+
 .range-event-bar span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -421,7 +445,7 @@ select {
 
 .range-more-count {
   bottom: 6px;
-  font-size: 12px;
+  font-size: var(--calendar-event-font-size);
   left: 12px;
   position: absolute;
 }
@@ -440,9 +464,9 @@ select {
   border-radius: 999px;
   color: #ffffff;
   display: inline-flex;
-  height: 24px;
+  height: var(--calendar-today-size);
   justify-content: center;
-  width: 24px;
+  width: var(--calendar-today-size);
 }
 
 .detail-panel {
@@ -723,24 +747,4 @@ code {
     gap: 12px;
   }
 
-  .range-calendar-week,
-  .range-calendar-days {
-    min-height: 104px;
-  }
-
-  .range-day {
-    padding: 8px;
-  }
-
-  .range-event-layer {
-    left: 0;
-    right: 0;
-    top: 36px;
-  }
-
-  .range-event-bar {
-    font-size: 11px;
-    margin: 0 4px;
-    padding: 0 5px;
-  }
 }
