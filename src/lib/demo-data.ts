@@ -149,7 +149,7 @@ export const demoTasks: CalendarTask[] = [
     status: "todo",
     priority: "normal",
     createdBy: "u-li",
-    assigneeIds: ["u-li"],
+    assigneeIds: ["u-admin"],
   },
   {
     id: "t-8",

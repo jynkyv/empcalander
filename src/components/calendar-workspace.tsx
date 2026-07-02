@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import {
   Avatar,
@@ -11,6 +12,7 @@ import {
   Input,
   Modal,
   Progress,
+  Segmented,
   Select,
   Space,
   Tag,
@@ -42,6 +44,9 @@ const currentUserId = "u-admin";
 
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
 
+type CalendarScope = "all" | "sent" | "received";
+type TaskRelation = "sent" | "received";
+
 const statusMeta: Record<
   TaskStatus,
   { label: string; color: string; progress: number }
@@ -55,6 +60,26 @@ const priorityMeta: Record<TaskPriority, { label: string; color: string }> = {
   low: { label: "低", color: "default" },
   normal: { label: "普通", color: "blue" },
   high: { label: "高", color: "red" },
+};
+
+const relationMeta: Record<
+  TaskRelation,
+  { label: string; color: string; mid: string; soft: string; trail: string }
+> = {
+  sent: {
+    label: "我发出的",
+    color: "#2f6fed",
+    mid: "#dce9ff",
+    soft: "#eef5ff",
+    trail: "#e7eefc",
+  },
+  received: {
+    label: "发给我的",
+    color: "#f59e0b",
+    mid: "#ffedc2",
+    soft: "#fff7e6",
+    trail: "#f8edd6",
+  },
 };
 
 type TaskFormValues = {
@@ -129,6 +154,25 @@ function clampTaskToWeek(task: CalendarTask, weekStart: Dayjs) {
   };
 }
 
+function isSentTask(task: CalendarTask) {
+  return task.createdBy === currentUserId;
+}
+
+function isReceivedTask(task: CalendarTask) {
+  return task.createdBy !== currentUserId && task.assigneeIds.includes(currentUserId);
+}
+
+function taskMatchesScope(task: CalendarTask, scope: CalendarScope) {
+  if (scope === "sent") return isSentTask(task);
+  if (scope === "received") return isReceivedTask(task);
+
+  return isSentTask(task) || isReceivedTask(task);
+}
+
+function relationForTask(task: CalendarTask): TaskRelation {
+  return isReceivedTask(task) ? "received" : "sent";
+}
+
 function initials(name: string) {
   return name.slice(0, 1).toUpperCase();
 }
@@ -149,6 +193,7 @@ export function CalendarWorkspace() {
   const [tasks, setTasks] = useState<CalendarTask[]>(demoTasks);
   const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs("2026-07-02"));
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs("2026-07-02"));
+  const [calendarScope, setCalendarScope] = useState<CalendarScope>("all");
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -177,26 +222,33 @@ export function CalendarWorkspace() {
     );
   }, [calendarValue]);
 
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => taskMatchesScope(task, calendarScope)),
+    [calendarScope, tasks],
+  );
+
   const selectedTasks = useMemo(
-    () => tasks.filter((task) => isTaskOnDate(task, selectedDate)),
-    [selectedDate, tasks],
+    () => visibleTasks.filter((task) => isTaskOnDate(task, selectedDate)),
+    [selectedDate, visibleTasks],
   );
 
   const monthTasks = useMemo(
     () =>
-      tasks.filter((task) =>
+      visibleTasks.filter((task) =>
         taskIntersectsRange(
           task,
           calendarValue.startOf("month"),
           calendarValue.endOf("month"),
         ),
       ),
-    [calendarValue, tasks],
+    [calendarValue, visibleTasks],
   );
 
   const doneCount = monthTasks.filter((task) => task.status === "done").length;
   const completion =
     monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
+  const sentMonthCount = monthTasks.filter(isSentTask).length;
+  const receivedMonthCount = monthTasks.filter(isReceivedTask).length;
 
   const openTaskModal = (date = selectedDate) => {
     taskForm.setFieldsValue({
@@ -296,6 +348,15 @@ export function CalendarWorkspace() {
                 今天
               </Button>
             </Flex>
+            <Segmented
+              onChange={(value) => setCalendarScope(value as CalendarScope)}
+              options={[
+                { label: "全部", value: "all" },
+                { label: "我发出的", value: "sent" },
+                { label: "发给我的", value: "received" },
+              ]}
+              value={calendarScope}
+            />
           </div>
 
           <MonthRangeCalendar
@@ -304,8 +365,7 @@ export function CalendarWorkspace() {
             onSelectDate={setSelectedDate}
             onSelectTask={openTaskDetail}
             selectedDate={selectedDate}
-            tasks={tasks}
-            userById={userById}
+            tasks={visibleTasks}
             weeks={calendarWeeks}
           />
         </section>
@@ -322,6 +382,10 @@ export function CalendarWorkspace() {
           <div className="summary-row">
             <span>本月任务 {monthTasks.length}</span>
             <span>已完成 {doneCount}</span>
+          </div>
+          <div className="relation-summary-row">
+            <span>我发出 {sentMonthCount}</span>
+            <span>发给我 {receivedMonthCount}</span>
           </div>
           <div className="task-detail-list">
             {selectedTasks.length === 0 ? (
@@ -469,7 +533,6 @@ function MonthRangeCalendar({
   onSelectTask,
   selectedDate,
   tasks,
-  userById,
   weeks,
 }: {
   calendarValue: Dayjs;
@@ -478,7 +541,6 @@ function MonthRangeCalendar({
   onSelectTask: (task: CalendarTask) => void;
   selectedDate: Dayjs;
   tasks: CalendarTask[];
-  userById: Map<string, CalendarUser>;
   weeks: Dayjs[][];
 }) {
   const visibleWeekEventCount = 2;
@@ -531,7 +593,8 @@ function MonthRangeCalendar({
             <div className="range-event-layer">
               {weekTasks.slice(0, visibleWeekEventCount).map((task, index) => {
                 const segment = clampTaskToWeek(task, weekStart);
-                const owner = userById.get(task.assigneeIds[0]);
+                const relation = relationForTask(task);
+                const relationStyle = relationMeta[relation];
 
                 if (!segment) return null;
 
@@ -539,6 +602,8 @@ function MonthRangeCalendar({
                   <button
                     className={[
                       "range-event-bar",
+                      `relation-${relation}`,
+                      `is-${task.status}`,
                       segment.continuesBefore ? "continues-before" : "",
                       segment.continuesAfter ? "continues-after" : "",
                     ].join(" ")}
@@ -548,17 +613,23 @@ function MonthRangeCalendar({
                       onSelectTask(task);
                     }}
                     style={{
-                      backgroundColor: `${owner?.color || "#2f6fed"}1f`,
-                      borderColor: owner?.color || "#2f6fed",
+                      "--event-color": relationStyle.color,
+                      "--event-mid": relationStyle.mid,
+                      "--event-soft": relationStyle.soft,
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
                       gridRow: index + 1,
-                    }}
+                    } as CSSProperties}
                     title={task.title}
                     type="button"
                   >
                     <span
                       className="task-dot"
-                      style={{ backgroundColor: owner?.color || "#2f6fed" }}
+                      style={{
+                        backgroundColor:
+                          task.status === "done"
+                            ? "rgba(255,255,255,0.88)"
+                            : relationStyle.color,
+                      }}
                     />
                     <span>{task.title}</span>
                   </button>
@@ -591,18 +662,33 @@ function TaskDetailCard({
     .filter(Boolean) as CalendarUser[];
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
+  const relation = relationForTask(task);
+  const relationStyle = relationMeta[relation];
 
   return (
-    <button className="task-card task-card-button" onClick={() => onOpen(task)} type="button">
+    <button
+      className={`task-card task-card-button relation-${relation}`}
+      onClick={() => onOpen(task)}
+      type="button"
+    >
       <div className="task-card-top">
         <div>
           <Title level={5}>{task.title}</Title>
           <Text type="secondary">{formatTaskRange(task)}</Text>
         </div>
-        <Tag color={status.color}>{status.label}</Tag>
+        <Space size={6}>
+          <Tag color={relationStyle.color}>{relationStyle.label}</Tag>
+          <Tag color={status.color}>{status.label}</Tag>
+        </Space>
       </div>
       <p>{task.description}</p>
-      <Progress percent={status.progress} showInfo={false} size="small" />
+      <Progress
+        percent={status.progress}
+        showInfo={false}
+        size="small"
+        strokeColor={relationStyle.color}
+        trailColor={relationStyle.trail}
+      />
       <div className="task-meta">
         <Tag color={priority.color}>优先级 {priority.label}</Tag>
         <Avatar.Group max={{ count: 3 }}>
@@ -637,6 +723,8 @@ function TaskActionModal({
     .filter(Boolean) as CalendarUser[];
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
+  const relation = relationForTask(task);
+  const relationStyle = relationMeta[relation];
 
   return (
     <Modal
@@ -657,6 +745,7 @@ function TaskActionModal({
     >
       <div className="task-action-body">
         <div className="task-action-status">
+          <Tag color={relationStyle.color}>{relationStyle.label}</Tag>
           <Tag color={status.color}>{status.label}</Tag>
           <Tag color={priority.color}>优先级 {priority.label}</Tag>
         </div>

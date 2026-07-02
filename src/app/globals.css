@@ -332,7 +332,8 @@ select {
 
 .range-event-bar {
   align-items: center;
-  border: 1px solid #2f6fed;
+  background: var(--event-soft);
+  border: 1px solid var(--event-color);
   border-radius: 6px;
   color: #25324b;
   cursor: pointer;
@@ -345,7 +346,54 @@ select {
   overflow: hidden;
   padding: 0 8px;
   pointer-events: auto;
+  position: relative;
   text-align: left;
+}
+
+.range-event-bar.is-todo {
+  background: var(--event-soft);
+}
+
+.range-event-bar.is-doing {
+  background: var(--event-mid);
+  box-shadow:
+    inset 4px 0 0 var(--event-color),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  padding-left: 10px;
+}
+
+.range-event-bar.is-done {
+  background: var(--event-color);
+  border-style: solid;
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.range-event-bar.relation-sent {
+  border-radius: 6px;
+}
+
+.range-event-bar.relation-received {
+  border-radius: 999px;
+  border-style: dashed;
+}
+
+.range-event-bar.relation-received.is-done {
+  border-style: solid;
+}
+
+.range-event-bar.relation-received.is-doing {
+  box-shadow:
+    inset -4px 0 0 var(--event-color),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.55);
+  padding-left: 8px;
+  padding-right: 10px;
+}
+
+.range-event-bar > span {
+  position: relative;
+  z-index: 1;
 }
 
 .range-event-bar span:last-child {
@@ -424,6 +472,13 @@ select {
   font-size: 13px;
 }
 
+.relation-summary-row {
+  color: #7a8497;
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+}
+
 .task-detail-list {
   display: grid;
   gap: 12px;
@@ -448,6 +503,33 @@ select {
 
 .task-card-button:hover {
   border-color: #2f6fed;
+}
+
+.task-card.relation-sent {
+  background: linear-gradient(90deg, #f7fbff 0%, #ffffff 44%);
+  border-left: 4px solid #2f6fed;
+}
+
+.task-card.relation-received {
+  background: #fffaf0;
+  border-color: #f3bd60;
+  border-style: dashed;
+}
+
+.task-card-button.relation-received:hover {
+  border-color: #f59e0b;
+}
+
+.task-card-top {
+  gap: 12px;
+}
+
+.task-card-top > div {
+  min-width: 0;
+}
+
+.task-card-top .ant-space {
+  flex-shrink: 0;
 }
 
 .task-card p {
