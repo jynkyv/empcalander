@@ -1,28 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Avatar,
-  Button,
-  Checkbox,
-  Flex,
-  Input,
-  Layout,
-  Menu,
-  Space,
-  Typography,
-} from "antd";
+import { Avatar, Layout, Menu, Typography } from "antd";
 import {
   BellOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
-  SearchOutlined,
   SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import type { CalendarUser } from "@/lib/types";
 
 const { Content, Sider } = Layout;
 const { Text, Title } = Typography;
@@ -32,10 +19,6 @@ type WorkspaceShellProps = {
   eyebrow?: string;
   actions?: ReactNode;
   children: ReactNode;
-  users?: CalendarUser[];
-  activeUserIds?: string[];
-  onActiveUserIdsChange?: (ids: string[]) => void;
-  showMemberFilter?: boolean;
 };
 
 const navItems = [
@@ -43,7 +26,7 @@ const navItems = [
     key: "calendar",
     path: "/",
     icon: <CalendarOutlined />,
-    label: "日历总览",
+    label: "日历",
   },
   {
     key: "tasks",
@@ -85,32 +68,12 @@ function initials(name: string) {
 
 export function WorkspaceShell({
   actions,
-  activeUserIds = [],
   children,
   eyebrow = "管理员工作台",
-  onActiveUserIdsChange,
-  showMemberFilter = false,
   title,
-  users = [],
 }: WorkspaceShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [memberQuery, setMemberQuery] = useState("");
-
-  const filteredUsers = useMemo(() => {
-    const query = memberQuery.trim().toLowerCase();
-
-    if (!query) return users;
-
-    return users.filter((user) => {
-      return (
-        user.name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query)
-      );
-    });
-  }, [memberQuery, users]);
-
-  const activeCount = activeUserIds.length;
 
   return (
     <Layout className="workspace">
@@ -136,78 +99,13 @@ export function WorkspaceShell({
           />
 
           <div className="sidebar-footer">
-            {showMemberFilter ? (
-              <section className="member-filter-panel">
-                <Flex align="center" justify="space-between">
-                  <div>
-                    <Text strong>日历成员</Text>
-                    <div className="member-count">
-                      已选 {activeCount}/{users.length}
-                    </div>
-                  </div>
-                  <Space size={4}>
-                    <Button
-                      size="small"
-                      type="text"
-                      onClick={() =>
-                        onActiveUserIdsChange?.(users.map((user) => user.id))
-                      }
-                    >
-                      全选
-                    </Button>
-                    <Button
-                      size="small"
-                      type="text"
-                      onClick={() => onActiveUserIdsChange?.([])}
-                    >
-                      清空
-                    </Button>
-                  </Space>
-                </Flex>
-                <Input
-                  allowClear
-                  className="member-search"
-                  onChange={(event) => setMemberQuery(event.target.value)}
-                  placeholder="搜索成员"
-                  prefix={<SearchOutlined />}
-                  size="small"
-                  value={memberQuery}
-                />
-                <div className="member-filter-list">
-                  {filteredUsers.map((user) => (
-                    <Checkbox
-                      checked={activeUserIds.includes(user.id)}
-                      className="member-filter-row"
-                      key={user.id}
-                      onChange={(event) => {
-                        if (event.target.checked) {
-                          onActiveUserIdsChange?.([...activeUserIds, user.id]);
-                          return;
-                        }
-
-                        onActiveUserIdsChange?.(
-                          activeUserIds.filter((id) => id !== user.id),
-                        );
-                      }}
-                    >
-                      <span
-                        className="legend-dot"
-                        style={{ backgroundColor: user.color }}
-                      />
-                      <span className="member-filter-name">{user.name}</span>
-                    </Checkbox>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <section className="account-panel">
-                <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
-                <div>
-                  <div className="account-name">田中太郎</div>
-                  <div className="account-role">管理员</div>
-                </div>
-              </section>
-            )}
+            <section className="account-panel">
+              <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
+              <div>
+                <div className="account-name">田中太郎</div>
+                <div className="account-role">管理员</div>
+              </div>
+            </section>
           </div>
         </div>
       </Sider>

@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AG集团工作日历",
-  description: "员工任务指派与团队日历管理后台",
+  description: "员工任务指派与工作日历管理后台",
 };
 
 export default function RootLayout({

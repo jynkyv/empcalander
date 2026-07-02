@@ -3,18 +3,14 @@
 import { useMemo, useState } from "react";
 import {
   Avatar,
-  Badge,
   Button,
-  Calendar,
   DatePicker,
-  Drawer,
   Empty,
   Flex,
   Form,
   Input,
   Modal,
   Progress,
-  Segmented,
   Select,
   Space,
   Tag,
@@ -24,7 +20,6 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
-  FilterOutlined,
   LeftOutlined,
   MoreOutlined,
   PlusOutlined,
@@ -40,9 +35,12 @@ import type {
   TaskStatus,
 } from "@/lib/types";
 
+const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
 const currentUserId = "u-admin";
+
+const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
 
 const statusMeta: Record<
   TaskStatus,
@@ -61,7 +59,7 @@ const priorityMeta: Record<TaskPriority, { label: string; color: string }> = {
 
 type TaskFormValues = {
   title: string;
-  date: Dayjs;
+  range: [Dayjs, Dayjs];
   assigneeIds: string[];
   status: TaskStatus;
   priority: TaskPriority;
@@ -74,12 +72,68 @@ type MemberFormValues = {
   role: "admin" | "member";
 };
 
-function sameDay(task: CalendarTask, date: Dayjs) {
-  return dayjs(task.startsAt).isSame(date, "day");
+function startOfCalendarMonth(month: Dayjs) {
+  const firstDay = month.startOf("month");
+  const weekday = firstDay.day();
+  const offset = weekday === 0 ? 6 : weekday - 1;
+
+  return firstDay.subtract(offset, "day");
+}
+
+function endOfTask(task: CalendarTask) {
+  return dayjs(task.endsAt || task.startsAt);
+}
+
+function isTaskOnDate(task: CalendarTask, date: Dayjs) {
+  const start = dayjs(task.startsAt);
+  const end = endOfTask(task);
+
+  return (
+    start.isBefore(date.endOf("day")) &&
+    end.isAfter(date.startOf("day")) &&
+    !end.isBefore(start)
+  );
+}
+
+function taskIntersectsRange(task: CalendarTask, start: Dayjs, end: Dayjs) {
+  return (
+    dayjs(task.startsAt).isBefore(end.endOf("day")) &&
+    endOfTask(task).isAfter(start.startOf("day"))
+  );
+}
+
+function clampTaskToWeek(task: CalendarTask, weekStart: Dayjs) {
+  const weekEnd = weekStart.add(6, "day");
+  const taskStart = dayjs(task.startsAt).startOf("day");
+  const taskEnd = endOfTask(task).startOf("day");
+  const segmentStart = taskStart.isBefore(weekStart) ? weekStart : taskStart;
+  const segmentEnd = taskEnd.isAfter(weekEnd) ? weekEnd : taskEnd;
+
+  if (segmentEnd.isBefore(weekStart) || segmentStart.isAfter(weekEnd)) {
+    return null;
+  }
+
+  return {
+    startColumn: segmentStart.diff(weekStart, "day") + 1,
+    span: segmentEnd.diff(segmentStart, "day") + 1,
+    continuesBefore: taskStart.isBefore(weekStart),
+    continuesAfter: taskEnd.isAfter(weekEnd),
+  };
 }
 
 function initials(name: string) {
   return name.slice(0, 1).toUpperCase();
+}
+
+function formatTaskRange(task: CalendarTask) {
+  const start = dayjs(task.startsAt);
+  const end = endOfTask(task);
+
+  if (start.isSame(end, "day")) {
+    return `${start.format("M月D日 HH:mm")} - ${end.format("HH:mm")}`;
+  }
+
+  return `${start.format("M月D日 HH:mm")} - ${end.format("M月D日 HH:mm")}`;
 }
 
 export function CalendarWorkspace() {
@@ -87,48 +141,47 @@ export function CalendarWorkspace() {
   const [tasks, setTasks] = useState<CalendarTask[]>(demoTasks);
   const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs("2026-07-02"));
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs("2026-07-02"));
-  const [viewMode, setViewMode] = useState<"team" | "mine">("team");
-  const [activeUserIds, setActiveUserIds] = useState<string[]>(
-    demoUsers.map((user) => user.id),
-  );
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
+
+  const activeTask = useMemo(
+    () => tasks.find((task) => task.id === activeTaskId) || null,
+    [activeTaskId, tasks],
+  );
 
   const userById = useMemo(
     () => new Map(users.map((user) => [user.id, user])),
     [users],
   );
 
-  const visibleTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const mine =
-        task.createdBy === currentUserId || task.assigneeIds.includes(currentUserId);
-      const inSelectedUsers = task.assigneeIds.some((id) =>
-        activeUserIds.includes(id),
-      );
+  const calendarWeeks = useMemo(() => {
+    const start = startOfCalendarMonth(calendarValue);
 
-      if (viewMode === "mine") {
-        return mine;
-      }
-
-      return inSelectedUsers;
-    });
-  }, [activeUserIds, tasks, viewMode]);
+    return Array.from({ length: 6 }, (_, weekIndex) =>
+      Array.from({ length: 7 }, (_, dayIndex) =>
+        start.add(weekIndex * 7 + dayIndex, "day"),
+      ),
+    );
+  }, [calendarValue]);
 
   const selectedTasks = useMemo(
-    () => visibleTasks.filter((task) => sameDay(task, selectedDate)),
-    [selectedDate, visibleTasks],
+    () => tasks.filter((task) => isTaskOnDate(task, selectedDate)),
+    [selectedDate, tasks],
   );
 
   const monthTasks = useMemo(
     () =>
-      visibleTasks.filter((task) =>
-        dayjs(task.startsAt).isSame(calendarValue, "month"),
+      tasks.filter((task) =>
+        taskIntersectsRange(
+          task,
+          calendarValue.startOf("month"),
+          calendarValue.endOf("month"),
+        ),
       ),
-    [calendarValue, visibleTasks],
+    [calendarValue, tasks],
   );
 
   const doneCount = monthTasks.filter((task) => task.status === "done").length;
@@ -137,7 +190,7 @@ export function CalendarWorkspace() {
 
   const openTaskModal = (date = selectedDate) => {
     taskForm.setFieldsValue({
-      date,
+      range: [date.hour(9).minute(0), date.hour(18).minute(0)],
       status: "todo",
       priority: "normal",
       assigneeIds: [currentUserId],
@@ -146,11 +199,13 @@ export function CalendarWorkspace() {
   };
 
   const createTask = (values: TaskFormValues) => {
+    const [start, end] = values.range;
     const nextTask: CalendarTask = {
       id: `task-${Date.now()}`,
       title: values.title,
       description: values.description || "暂无补充说明。",
-      startsAt: values.date.hour(9).minute(0).second(0).toISOString(),
+      startsAt: start.toISOString(),
+      endsAt: end.toISOString(),
       status: values.status,
       priority: values.priority,
       createdBy: currentUserId,
@@ -158,8 +213,8 @@ export function CalendarWorkspace() {
     };
 
     setTasks((current) => [...current, nextTask]);
-    setSelectedDate(values.date);
-    setCalendarValue(values.date);
+    setSelectedDate(start);
+    setCalendarValue(start);
     setTaskModalOpen(false);
     taskForm.resetFields();
   };
@@ -175,77 +230,24 @@ export function CalendarWorkspace() {
     };
 
     setUsers((current) => [...current, nextUser]);
-    setActiveUserIds((current) => [...current, nextUser.id]);
     setMemberModalOpen(false);
     memberForm.resetFields();
   };
 
-  const renderDateCell = (date: Dayjs) => {
-    const dayTasks = visibleTasks.filter((task) => sameDay(task, date));
-    const isCurrentMonth = date.month() === calendarValue.month();
-    const isSelected = date.isSame(selectedDate, "day");
-    const isToday = date.isSame(dayjs(), "day");
-
-    return (
-      <div
-        className={[
-          "calendar-day",
-          isCurrentMonth ? "" : "is-muted",
-          isSelected ? "is-selected" : "",
-        ].join(" ")}
-      >
-        <div className="calendar-day-header">
-          <span className={isToday ? "today-number" : ""}>{date.date()}</span>
-          {dayTasks.length > 0 ? (
-            <Badge count={dayTasks.length} color="#2f6fed" size="small" />
-          ) : null}
-        </div>
-        <div className="calendar-events">
-          {dayTasks.slice(0, 3).map((task) => {
-            const owner = userById.get(task.assigneeIds[0]);
-            return (
-              <div
-                className="task-pill"
-                key={task.id}
-                style={{
-                  borderColor: owner?.color || "#d8dee9",
-                  backgroundColor: `${owner?.color || "#2f6fed"}17`,
-                }}
-              >
-                <span
-                  className="task-dot"
-                  style={{ backgroundColor: owner?.color || "#2f6fed" }}
-                />
-                <span className="task-title">{task.title}</span>
-              </div>
-            );
-          })}
-          {dayTasks.length > 3 ? (
-            <Text className="more-count" type="secondary">
-              +{dayTasks.length - 3} 项
-            </Text>
-          ) : null}
-        </div>
-      </div>
+  const updateTaskStatus = (taskId: string, status: TaskStatus) => {
+    setTasks((current) =>
+      current.map((task) => (task.id === taskId ? { ...task, status } : task)),
     );
+  };
+
+  const openTaskDetail = (task: CalendarTask) => {
+    setActiveTaskId(task.id);
   };
 
   return (
     <WorkspaceShell
-      activeUserIds={activeUserIds}
       actions={
         <Space size={12} wrap>
-          <Segmented
-            onChange={(value) => setViewMode(value as "team" | "mine")}
-            options={[
-              { label: "全员日历", value: "team" },
-              { label: "我的日历", value: "mine" },
-            ]}
-            value={viewMode}
-          />
-          <Tooltip title="日历成员在左侧可搜索筛选">
-            <Button icon={<FilterOutlined />} />
-          </Tooltip>
           <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
             开账号
           </Button>
@@ -259,54 +261,42 @@ export function CalendarWorkspace() {
           <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
         </Space>
       }
-      onActiveUserIdsChange={setActiveUserIds}
-      showMemberFilter
-      title="团队任务日历"
-      users={users}
+      title="日历"
     >
       <div className="content-grid">
         <section className="calendar-panel">
-          <Calendar
-            fullCellRender={(date) => renderDateCell(date)}
-            headerRender={({ value, onChange }) => {
-              const moveMonth = (offset: number) => {
-                const next = value.add(offset, "month");
-                setCalendarValue(next);
-                onChange(next);
-              };
+          <div className="calendar-header">
+            <Flex align="center" gap={10}>
+              <Title level={4}>{calendarValue.format("YYYY年M月")}</Title>
+              <Button
+                icon={<LeftOutlined />}
+                onClick={() => setCalendarValue((current) => current.subtract(1, "month"))}
+              />
+              <Button
+                icon={<RightOutlined />}
+                onClick={() => setCalendarValue((current) => current.add(1, "month"))}
+              />
+              <Button
+                onClick={() => {
+                  const today = dayjs();
+                  setCalendarValue(today);
+                  setSelectedDate(today);
+                }}
+              >
+                今天
+              </Button>
+            </Flex>
+          </div>
 
-              const goToday = () => {
-                const today = dayjs();
-                setCalendarValue(today);
-                setSelectedDate(today);
-                onChange(today);
-              };
-
-              return (
-                <div className="calendar-header">
-                  <Flex align="center" gap={10}>
-                    <Title level={4}>{value.format("YYYY年M月")}</Title>
-                    <Button icon={<LeftOutlined />} onClick={() => moveMonth(-1)} />
-                    <Button icon={<RightOutlined />} onClick={() => moveMonth(1)} />
-                    <Button onClick={goToday}>今天</Button>
-                  </Flex>
-                  <Segmented
-                    options={[
-                      { label: "月", value: "month" },
-                      { label: "年", value: "year" },
-                    ]}
-                    value="month"
-                  />
-                </div>
-              );
-            }}
-            onPanelChange={(date) => setCalendarValue(date)}
-            onSelect={(date) => {
-              setSelectedDate(date);
-              setCalendarValue(date);
-              setDetailOpen(true);
-            }}
-            value={calendarValue}
+          <MonthRangeCalendar
+            calendarValue={calendarValue}
+            onCreateTask={openTaskModal}
+            onSelectDate={setSelectedDate}
+            onSelectTask={openTaskDetail}
+            selectedDate={selectedDate}
+            tasks={tasks}
+            userById={userById}
+            weeks={calendarWeeks}
           />
         </section>
 
@@ -316,7 +306,7 @@ export function CalendarWorkspace() {
               <Text type="secondary">{selectedDate.format("M月D日 dddd")}</Text>
               <Title level={4}>当天任务</Title>
             </div>
-            <Button icon={<MoreOutlined />} />
+            <Button icon={<MoreOutlined />} onClick={() => openTaskModal(selectedDate)} />
           </div>
           <Progress percent={completion} size="small" strokeColor="#17a765" />
           <div className="summary-row">
@@ -328,29 +318,17 @@ export function CalendarWorkspace() {
               <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               selectedTasks.map((task) => (
-                <TaskDetailCard key={task.id} task={task} userById={userById} />
+                <TaskDetailCard
+                  key={task.id}
+                  onOpen={openTaskDetail}
+                  task={task}
+                  userById={userById}
+                />
               ))
             )}
           </div>
         </aside>
       </div>
-
-      <Drawer
-        className="mobile-detail-drawer"
-        onClose={() => setDetailOpen(false)}
-        open={detailOpen}
-        title={selectedDate.format("M月D日任务")}
-      >
-        {selectedTasks.length === 0 ? (
-          <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        ) : (
-          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-            {selectedTasks.map((task) => (
-              <TaskDetailCard key={task.id} task={task} userById={userById} />
-            ))}
-          </Space>
-        )}
-      </Drawer>
 
       <Modal
         destroyOnHidden
@@ -369,11 +347,15 @@ export function CalendarWorkspace() {
             <Input placeholder="例如：办公室电脑安装" />
           </Form.Item>
           <Form.Item
-            label="日期"
-            name="date"
-            rules={[{ message: "请选择日期", required: true }]}
+            label="时间范围"
+            name="range"
+            rules={[{ message: "请选择开始和结束时间", required: true }]}
           >
-            <DatePicker style={{ width: "100%" }} />
+            <RangePicker
+              format="YYYY/MM/DD HH:mm"
+              showTime={{ format: "HH:mm" }}
+              style={{ width: "100%" }}
+            />
           </Form.Item>
           <Form.Item
             label="负责人"
@@ -413,6 +395,13 @@ export function CalendarWorkspace() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <TaskActionModal
+        onClose={() => setActiveTaskId(null)}
+        onStatusChange={updateTaskStatus}
+        task={activeTask}
+        userById={userById}
+      />
 
       <Modal
         destroyOnHidden
@@ -463,10 +452,125 @@ export function CalendarWorkspace() {
   );
 }
 
+function MonthRangeCalendar({
+  calendarValue,
+  onCreateTask,
+  onSelectDate,
+  onSelectTask,
+  selectedDate,
+  tasks,
+  userById,
+  weeks,
+}: {
+  calendarValue: Dayjs;
+  onCreateTask: (date: Dayjs) => void;
+  onSelectDate: (date: Dayjs) => void;
+  onSelectTask: (task: CalendarTask) => void;
+  selectedDate: Dayjs;
+  tasks: CalendarTask[];
+  userById: Map<string, CalendarUser>;
+  weeks: Dayjs[][];
+}) {
+  return (
+    <div className="range-calendar">
+      <div className="range-calendar-weekdays">
+        {weekdays.map((weekday) => (
+          <div key={weekday}>{weekday}</div>
+        ))}
+      </div>
+      {weeks.map((week) => {
+        const weekStart = week[0];
+        const weekEnd = week[6];
+        const weekTasks = tasks
+          .filter((task) => taskIntersectsRange(task, weekStart, weekEnd))
+          .sort(
+            (a, b) =>
+              dayjs(a.startsAt).valueOf() - dayjs(b.startsAt).valueOf() ||
+              endOfTask(b).valueOf() - endOfTask(a).valueOf(),
+          );
+
+        return (
+          <div className="range-calendar-week" key={weekStart.format("YYYY-MM-DD")}>
+            <div className="range-calendar-days">
+              {week.map((date) => {
+                const isCurrentMonth = date.month() === calendarValue.month();
+                const isSelected = date.isSame(selectedDate, "day");
+                const isToday = date.isSame(dayjs(), "day");
+
+                return (
+                  <button
+                    className={[
+                      "range-day",
+                      isCurrentMonth ? "" : "is-muted",
+                      isSelected ? "is-selected" : "",
+                    ].join(" ")}
+                    key={date.format("YYYY-MM-DD")}
+                    onDoubleClick={() => onCreateTask(date)}
+                    onClick={() => onSelectDate(date)}
+                    type="button"
+                  >
+                    <span className={isToday ? "today-number" : ""}>
+                      {date.date()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="range-event-layer">
+              {weekTasks.slice(0, 4).map((task, index) => {
+                const segment = clampTaskToWeek(task, weekStart);
+                const owner = userById.get(task.assigneeIds[0]);
+
+                if (!segment) return null;
+
+                return (
+                  <button
+                    className={[
+                      "range-event-bar",
+                      segment.continuesBefore ? "continues-before" : "",
+                      segment.continuesAfter ? "continues-after" : "",
+                    ].join(" ")}
+                    key={`${weekStart.format("YYYY-MM-DD")}-${task.id}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectTask(task);
+                    }}
+                    style={{
+                      backgroundColor: `${owner?.color || "#2f6fed"}1f`,
+                      borderColor: owner?.color || "#2f6fed",
+                      gridColumn: `${segment.startColumn} / span ${segment.span}`,
+                      gridRow: index + 1,
+                    }}
+                    title={task.title}
+                    type="button"
+                  >
+                    <span
+                      className="task-dot"
+                      style={{ backgroundColor: owner?.color || "#2f6fed" }}
+                    />
+                    <span>{task.title}</span>
+                  </button>
+                );
+              })}
+              {weekTasks.length > 4 ? (
+                <Text className="range-more-count" type="secondary">
+                  +{weekTasks.length - 4} 项
+                </Text>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TaskDetailCard({
+  onOpen,
   task,
   userById,
 }: {
+  onOpen: (task: CalendarTask) => void;
   task: CalendarTask;
   userById: Map<string, CalendarUser>;
 }) {
@@ -477,11 +581,11 @@ function TaskDetailCard({
   const priority = priorityMeta[task.priority];
 
   return (
-    <article className="task-card">
+    <button className="task-card task-card-button" onClick={() => onOpen(task)} type="button">
       <div className="task-card-top">
         <div>
           <Title level={5}>{task.title}</Title>
-          <Text type="secondary">{dayjs(task.startsAt).format("HH:mm")}</Text>
+          <Text type="secondary">{formatTaskRange(task)}</Text>
         </div>
         <Tag color={status.color}>{status.label}</Tag>
       </div>
@@ -499,6 +603,72 @@ function TaskDetailCard({
           ))}
         </Avatar.Group>
       </div>
-    </article>
+    </button>
+  );
+}
+
+function TaskActionModal({
+  onClose,
+  onStatusChange,
+  task,
+  userById,
+}: {
+  onClose: () => void;
+  onStatusChange: (taskId: string, status: TaskStatus) => void;
+  task: CalendarTask | null;
+  userById: Map<string, CalendarUser>;
+}) {
+  if (!task) return null;
+
+  const assignees = task.assigneeIds
+    .map((id) => userById.get(id))
+    .filter(Boolean) as CalendarUser[];
+  const status = statusMeta[task.status];
+  const priority = priorityMeta[task.priority];
+
+  return (
+    <Modal
+      footer={
+        <Space wrap>
+          <Button onClick={() => onStatusChange(task.id, "todo")}>待处理</Button>
+          <Button onClick={() => onStatusChange(task.id, "doing")} type="primary">
+            开始处理
+          </Button>
+          <Button onClick={() => onStatusChange(task.id, "done")} type="primary">
+            标记完成
+          </Button>
+        </Space>
+      }
+      onCancel={onClose}
+      open
+      title={task.title}
+    >
+      <div className="task-action-body">
+        <div className="task-action-status">
+          <Tag color={status.color}>{status.label}</Tag>
+          <Tag color={priority.color}>优先级 {priority.label}</Tag>
+        </div>
+        <div className="task-action-row">
+          <Text type="secondary">时间范围</Text>
+          <Text>{formatTaskRange(task)}</Text>
+        </div>
+        <div className="task-action-row">
+          <Text type="secondary">负责人</Text>
+          <Avatar.Group max={{ count: 5 }}>
+            {assignees.map((user) => (
+              <Tooltip key={user.id} title={user.name}>
+                <Avatar style={{ backgroundColor: user.color }}>
+                  {initials(user.name)}
+                </Avatar>
+              </Tooltip>
+            ))}
+          </Avatar.Group>
+        </div>
+        <div className="task-action-description">
+          <Text type="secondary">任务说明</Text>
+          <p>{task.description || "暂无补充说明。"}</p>
+        </div>
+      </div>
+    </Modal>
   );
 }
