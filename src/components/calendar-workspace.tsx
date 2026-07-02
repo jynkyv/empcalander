@@ -12,8 +12,6 @@ import {
   Flex,
   Form,
   Input,
-  Layout,
-  Menu,
   Modal,
   Progress,
   Segmented,
@@ -26,18 +24,14 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
-  BellOutlined,
-  CalendarOutlined,
-  CheckSquareOutlined,
   FilterOutlined,
   LeftOutlined,
   MoreOutlined,
   PlusOutlined,
   RightOutlined,
-  SettingOutlined,
-  TeamOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
+import { WorkspaceShell } from "@/components/workspace-shell";
 import { demoTasks, demoUsers } from "@/lib/demo-data";
 import type {
   CalendarTask,
@@ -46,7 +40,6 @@ import type {
   TaskStatus,
 } from "@/lib/types";
 
-const { Content, Sider } = Layout;
 const { Text, Title } = Typography;
 
 const currentUserId = "u-admin";
@@ -238,157 +231,109 @@ export function CalendarWorkspace() {
   };
 
   return (
-    <Layout className="workspace">
-      <Sider width={220} className="workspace-sider">
-        <div className="brand">
-          <div className="brand-mark">A</div>
-          <div>
-            <div className="brand-name">AG集团</div>
-            <div className="brand-subtitle">工作日历</div>
-          </div>
-        </div>
-        <Menu
-          className="side-menu"
-          mode="inline"
-          selectedKeys={["calendar"]}
-          items={[
-            { key: "calendar", icon: <CalendarOutlined />, label: "日历总览" },
-            { key: "tasks", icon: <CheckSquareOutlined />, label: "我的任务" },
-            { key: "team", icon: <TeamOutlined />, label: "员工账号" },
-            { key: "notice", icon: <BellOutlined />, label: "公告通知" },
-            { key: "settings", icon: <SettingOutlined />, label: "设置管理" },
-          ]}
-        />
-        <div className="legend-panel">
-          <Text strong>日历成员</Text>
-          <div className="legend-list">
-            {users.map((user) => (
-              <label className="legend-row" key={user.id}>
-                <input
-                  checked={activeUserIds.includes(user.id)}
-                  onChange={(event) => {
-                    setActiveUserIds((current) =>
-                      event.target.checked
-                        ? [...current, user.id]
-                        : current.filter((id) => id !== user.id),
-                    );
-                  }}
-                  type="checkbox"
-                />
-                <span
-                  className="legend-dot"
-                  style={{ backgroundColor: user.color }}
-                />
-                <span>{user.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </Sider>
+    <WorkspaceShell
+      activeUserIds={activeUserIds}
+      actions={
+        <Space size={12} wrap>
+          <Segmented
+            onChange={(value) => setViewMode(value as "team" | "mine")}
+            options={[
+              { label: "全员日历", value: "team" },
+              { label: "我的日历", value: "mine" },
+            ]}
+            value={viewMode}
+          />
+          <Tooltip title="日历成员在左侧可搜索筛选">
+            <Button icon={<FilterOutlined />} />
+          </Tooltip>
+          <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
+            开账号
+          </Button>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => openTaskModal()}
+            type="primary"
+          >
+            新增任务
+          </Button>
+          <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
+        </Space>
+      }
+      onActiveUserIdsChange={setActiveUserIds}
+      showMemberFilter
+      title="团队任务日历"
+      users={users}
+    >
+      <div className="content-grid">
+        <section className="calendar-panel">
+          <Calendar
+            fullCellRender={(date) => renderDateCell(date)}
+            headerRender={({ value, onChange }) => {
+              const moveMonth = (offset: number) => {
+                const next = value.add(offset, "month");
+                setCalendarValue(next);
+                onChange(next);
+              };
 
-      <Layout className="workspace-main">
-        <header className="topbar">
-          <div>
-            <Text type="secondary">管理员工作台</Text>
-            <Title level={3}>团队任务日历</Title>
-          </div>
-          <Space size={12} wrap>
-            <Segmented
-              onChange={(value) => setViewMode(value as "team" | "mine")}
-              options={[
-                { label: "全员日历", value: "team" },
-                { label: "我的日历", value: "mine" },
-              ]}
-              value={viewMode}
-            />
-            <Tooltip title="成员筛选">
-              <Button icon={<FilterOutlined />} />
-            </Tooltip>
-            <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
-              开账号
-            </Button>
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => openTaskModal()}
-              type="primary"
-            >
-              新增任务
-            </Button>
-            <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
-          </Space>
-        </header>
+              const goToday = () => {
+                const today = dayjs();
+                setCalendarValue(today);
+                setSelectedDate(today);
+                onChange(today);
+              };
 
-        <Content className="content-grid">
-          <section className="calendar-panel">
-            <Calendar
-              fullCellRender={(date) => renderDateCell(date)}
-              headerRender={({ value, onChange }) => {
-                const moveMonth = (offset: number) => {
-                  const next = value.add(offset, "month");
-                  setCalendarValue(next);
-                  onChange(next);
-                };
+              return (
+                <div className="calendar-header">
+                  <Flex align="center" gap={10}>
+                    <Title level={4}>{value.format("YYYY年M月")}</Title>
+                    <Button icon={<LeftOutlined />} onClick={() => moveMonth(-1)} />
+                    <Button icon={<RightOutlined />} onClick={() => moveMonth(1)} />
+                    <Button onClick={goToday}>今天</Button>
+                  </Flex>
+                  <Segmented
+                    options={[
+                      { label: "月", value: "month" },
+                      { label: "年", value: "year" },
+                    ]}
+                    value="month"
+                  />
+                </div>
+              );
+            }}
+            onPanelChange={(date) => setCalendarValue(date)}
+            onSelect={(date) => {
+              setSelectedDate(date);
+              setCalendarValue(date);
+              setDetailOpen(true);
+            }}
+            value={calendarValue}
+          />
+        </section>
 
-                const goToday = () => {
-                  const today = dayjs();
-                  setCalendarValue(today);
-                  setSelectedDate(today);
-                  onChange(today);
-                };
-
-                return (
-                  <div className="calendar-header">
-                    <Flex align="center" gap={10}>
-                      <Title level={4}>{value.format("YYYY年M月")}</Title>
-                      <Button icon={<LeftOutlined />} onClick={() => moveMonth(-1)} />
-                      <Button icon={<RightOutlined />} onClick={() => moveMonth(1)} />
-                      <Button onClick={goToday}>今天</Button>
-                    </Flex>
-                    <Segmented
-                      options={[
-                        { label: "月", value: "month" },
-                        { label: "年", value: "year" },
-                      ]}
-                      value="month"
-                    />
-                  </div>
-                );
-              }}
-              onPanelChange={(date) => setCalendarValue(date)}
-              onSelect={(date) => {
-                setSelectedDate(date);
-                setCalendarValue(date);
-                setDetailOpen(true);
-              }}
-              value={calendarValue}
-            />
-          </section>
-
-          <aside className="detail-panel">
-            <div className="detail-header">
-              <div>
-                <Text type="secondary">{selectedDate.format("M月D日 dddd")}</Text>
-                <Title level={4}>当天任务</Title>
-              </div>
-              <Button icon={<MoreOutlined />} />
+        <aside className="detail-panel">
+          <div className="detail-header">
+            <div>
+              <Text type="secondary">{selectedDate.format("M月D日 dddd")}</Text>
+              <Title level={4}>当天任务</Title>
             </div>
-            <Progress percent={completion} size="small" strokeColor="#17a765" />
-            <div className="summary-row">
-              <span>本月任务 {monthTasks.length}</span>
-              <span>已完成 {doneCount}</span>
-            </div>
-            <div className="task-detail-list">
-              {selectedTasks.length === 0 ? (
-                <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              ) : (
-                selectedTasks.map((task) => (
-                  <TaskDetailCard key={task.id} task={task} userById={userById} />
-                ))
-              )}
-            </div>
-          </aside>
-        </Content>
-      </Layout>
+            <Button icon={<MoreOutlined />} />
+          </div>
+          <Progress percent={completion} size="small" strokeColor="#17a765" />
+          <div className="summary-row">
+            <span>本月任务 {monthTasks.length}</span>
+            <span>已完成 {doneCount}</span>
+          </div>
+          <div className="task-detail-list">
+            {selectedTasks.length === 0 ? (
+              <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              selectedTasks.map((task) => (
+                <TaskDetailCard key={task.id} task={task} userById={userById} />
+              ))
+            )}
+          </div>
+        </aside>
+      </div>
 
       <Drawer
         className="mobile-detail-drawer"
@@ -514,7 +459,7 @@ export function CalendarWorkspace() {
           </Text>
         </Form>
       </Modal>
-    </Layout>
+    </WorkspaceShell>
   );
 }
 

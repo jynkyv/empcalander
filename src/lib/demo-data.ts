@@ -29,6 +29,48 @@ export const demoUsers: CalendarUser[] = [
     role: "member",
     color: "#e5534b",
   },
+  {
+    id: "u-zhao",
+    name: "赵六",
+    email: "zhaoliu@ag.example",
+    role: "member",
+    color: "#00a2ae",
+  },
+  {
+    id: "u-qian",
+    name: "钱七",
+    email: "qianqi@ag.example",
+    role: "member",
+    color: "#7f56d9",
+  },
+  {
+    id: "u-sun",
+    name: "孙八",
+    email: "sunba@ag.example",
+    role: "member",
+    color: "#d9480f",
+  },
+  {
+    id: "u-zhou",
+    name: "周九",
+    email: "zhoujiu@ag.example",
+    role: "member",
+    color: "#0f766e",
+  },
+  {
+    id: "u-wu",
+    name: "吴十",
+    email: "wushi@ag.example",
+    role: "member",
+    color: "#be185d",
+  },
+  {
+    id: "u-zheng",
+    name: "郑十一",
+    email: "zhengshiyi@ag.example",
+    role: "member",
+    color: "#2563eb",
+  },
 ];
 
 export const demoTasks: CalendarTask[] = [
