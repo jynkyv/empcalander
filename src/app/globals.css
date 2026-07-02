@@ -371,13 +371,15 @@ select {
 
 .range-event-bar.relation-sent {
   border-radius: 6px;
+  border-style: dashed;
 }
 
 .range-event-bar.relation-received {
   border-radius: 999px;
-  border-style: dashed;
+  border-style: solid;
 }
 
+.range-event-bar.relation-sent.is-done,
 .range-event-bar.relation-received.is-done {
   border-style: solid;
 }

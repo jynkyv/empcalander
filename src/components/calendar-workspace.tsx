@@ -63,6 +63,12 @@ const priorityMeta: Record<TaskPriority, { label: string; color: string }> = {
   high: { label: "高", color: "red" },
 };
 
+const prioritySignalColor: Record<TaskPriority, string> = {
+  low: "#98a2b3",
+  normal: "#2f6fed",
+  high: "#e5484d",
+};
+
 const relationMeta: Record<
   TaskRelation,
   { label: string; color: string; mid: string; soft: string; trail: string }
@@ -613,6 +619,8 @@ function MonthRangeCalendar({
                 const segment = clampTaskToWeek(task, weekStart);
                 const relation = relationForTask(task);
                 const relationStyle = relationMeta[relation];
+                const priority = priorityMeta[task.priority];
+                const priorityColor = prioritySignalColor[task.priority];
 
                 if (!segment) return null;
 
@@ -637,7 +645,7 @@ function MonthRangeCalendar({
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
                       gridRow: index + 1,
                     } as CSSProperties}
-                    title={task.title}
+                    title={`${task.title} · ${relationStyle.label} · 优先级${priority.label}`}
                     type="button"
                   >
                     <span
@@ -646,7 +654,7 @@ function MonthRangeCalendar({
                         backgroundColor:
                           task.status === "done"
                             ? "rgba(255,255,255,0.88)"
-                            : relationStyle.color,
+                            : priorityColor,
                       }}
                     />
                     <span>{task.title}</span>
@@ -702,10 +710,10 @@ function TaskDetailCard({
       <p>{task.description}</p>
       <Progress
         percent={status.progress}
+        railColor={relationStyle.trail}
         showInfo={false}
         size="small"
         strokeColor={relationStyle.color}
-        trailColor={relationStyle.trail}
       />
       <div className="task-meta">
         <Tag color={priority.color}>优先级 {priority.label}</Tag>
