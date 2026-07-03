@@ -53,7 +53,6 @@ const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
-const allAssigneesValue = "__all_assignees__";
 
 type CalendarScope = "all" | "sent" | "received";
 type TaskRelation = "sent" | "received";
@@ -394,15 +393,12 @@ export function CalendarWorkspace({
     () => new Map(users.map((user) => [user.id, user])),
     [users],
   );
-  const allUserIds = useMemo(() => users.map((user) => user.id), [users]);
   const assigneeOptions = useMemo(
-    () => [
-      { label: "所有人", value: allAssigneesValue },
-      ...users.map((user) => ({
+    () =>
+      users.map((user) => ({
         label: user.name,
         value: user.id,
       })),
-    ],
     [users],
   );
 
@@ -476,11 +472,7 @@ export function CalendarWorkspace({
     if (!supabase || !currentUserId) return;
 
     const [start, end] = values.range;
-    const assigneeIds = Array.from(
-      new Set(
-        values.assigneeIds.filter((userId) => userId !== allAssigneesValue),
-      ),
-    );
+    const assigneeIds = Array.from(new Set(values.assigneeIds));
 
     if (assigneeIds.length === 0) {
       message.error("请选择负责人");
@@ -608,14 +600,6 @@ export function CalendarWorkspace({
 
   const openTaskDetail = (task: CalendarTask) => {
     setActiveTaskId(task.id);
-  };
-
-  const handleAssigneeChange = (assigneeIds: string[]) => {
-    if (!assigneeIds.includes(allAssigneesValue)) return;
-
-    taskForm.setFieldsValue({
-      assigneeIds: allUserIds,
-    });
   };
 
   if (!hasConfig || !supabase) {
@@ -797,7 +781,6 @@ export function CalendarWorkspace({
             <Select
               maxTagCount="responsive"
               mode="multiple"
-              onChange={handleAssigneeChange}
               optionFilterProp="label"
               options={assigneeOptions}
               showSearch
