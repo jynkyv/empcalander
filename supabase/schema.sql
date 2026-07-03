@@ -127,7 +127,7 @@ drop policy if exists profiles_read on public.profiles;
 create policy profiles_read
 on public.profiles for select
 to authenticated
-using (id = auth.uid() or public.is_admin());
+using (true);
 
 drop policy if exists profiles_update_self_or_admin on public.profiles;
 create policy profiles_update_self_or_admin
@@ -156,11 +156,26 @@ to authenticated
 with check (created_by = auth.uid());
 
 drop policy if exists tasks_update_owner_or_admin on public.tasks;
-create policy tasks_update_owner_or_admin
+drop policy if exists tasks_update_visible on public.tasks;
+create policy tasks_update_visible
 on public.tasks for update
 to authenticated
-using (created_by = auth.uid() or public.is_admin())
-with check (created_by = auth.uid() or public.is_admin());
+using (
+  public.is_admin()
+  or created_by = auth.uid()
+  or exists (
+    select 1 from public.task_assignees ta
+    where ta.task_id = tasks.id and ta.user_id = auth.uid()
+  )
+)
+with check (
+  public.is_admin()
+  or created_by = auth.uid()
+  or exists (
+    select 1 from public.task_assignees ta
+    where ta.task_id = tasks.id and ta.user_id = auth.uid()
+  )
+);
 
 drop policy if exists tasks_delete_owner_or_admin on public.tasks;
 create policy tasks_delete_owner_or_admin
@@ -172,7 +187,15 @@ drop policy if exists task_assignees_read_visible on public.task_assignees;
 create policy task_assignees_read_visible
 on public.task_assignees for select
 to authenticated
-using (user_id = auth.uid() or assigned_by = auth.uid() or public.is_admin());
+using (
+  user_id = auth.uid()
+  or assigned_by = auth.uid()
+  or public.is_admin()
+  or exists (
+    select 1 from public.tasks t
+    where t.id = task_id and t.created_by = auth.uid()
+  )
+);
 
 drop policy if exists task_assignees_insert_owner_or_admin on public.task_assignees;
 create policy task_assignees_insert_owner_or_admin

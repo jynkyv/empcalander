@@ -1,8 +1,10 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  App,
   Avatar,
   Button,
   DatePicker,
@@ -15,6 +17,7 @@ import {
   Segmented,
   Select,
   Space,
+  Spin,
   Tag,
   Tooltip,
   Typography,
@@ -29,7 +32,7 @@ import {
   UserAddOutlined,
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
-import { demoTasks, demoUsers } from "@/lib/demo-data";
+import { createClient } from "@/lib/supabase/client";
 import type {
   CalendarTask,
   CalendarUser,
@@ -40,10 +43,14 @@ import type {
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
-const currentUserId = "u-admin";
-const currentUserRole: CalendarUser["role"] = "admin";
-
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
+const bootstrapAdminEmail = "admin@ag.local";
+const bootstrapAdminPassword = "admin123";
+const hasSupabaseConfig = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+);
 
 type CalendarScope = "all" | "sent" | "received";
 type TaskRelation = "sent" | "received";
@@ -101,7 +108,33 @@ type TaskFormValues = {
 type MemberFormValues = {
   name: string;
   email: string;
+  password: string;
   role: "admin" | "member";
+};
+
+type LoginFormValues = {
+  email: string;
+  password: string;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: CalendarUser["role"];
+  color: string | null;
+};
+
+type TaskRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  created_by: string;
+  task_assignees?: { user_id: string }[] | null;
 };
 
 function startOfCalendarMonth(month: Dayjs) {
@@ -161,23 +194,63 @@ function clampTaskToWeek(task: CalendarTask, weekStart: Dayjs) {
   };
 }
 
-function isSentTask(task: CalendarTask) {
+function profileToUser(profile: ProfileRow): CalendarUser {
+  return {
+    id: profile.id,
+    name: profile.full_name,
+    email: profile.email,
+    role: profile.role,
+    color: profile.color || "#2f6fed",
+  };
+}
+
+function taskRowToTask(task: TaskRow): CalendarTask {
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description || "暂无补充说明。",
+    startsAt: task.starts_at,
+    endsAt: task.ends_at || undefined,
+    status: task.status,
+    priority: task.priority,
+    createdBy: task.created_by,
+    assigneeIds: (task.task_assignees || []).map((assignee) => assignee.user_id),
+  };
+}
+
+function normalizeLoginEmail(value: string) {
+  const email = value.trim().toLowerCase();
+  return email === "admin" ? bootstrapAdminEmail : email;
+}
+
+function isSentTask(task: CalendarTask, currentUserId: string) {
   return task.createdBy === currentUserId;
 }
 
-function isReceivedTask(task: CalendarTask) {
+function isReceivedTask(task: CalendarTask, currentUserId: string) {
   return task.createdBy !== currentUserId && task.assigneeIds.includes(currentUserId);
 }
 
-function taskMatchesScope(task: CalendarTask, scope: CalendarScope) {
-  if (scope === "sent") return isSentTask(task);
-  if (scope === "received") return isReceivedTask(task);
+function taskMatchesScope(
+  task: CalendarTask,
+  scope: CalendarScope,
+  currentUserId: string,
+  isAdmin: boolean,
+) {
+  if (scope === "sent") return isSentTask(task, currentUserId);
+  if (scope === "received") return isReceivedTask(task, currentUserId);
 
-  return isSentTask(task) || isReceivedTask(task);
+  return isAdmin || isSentTask(task, currentUserId) || isReceivedTask(task, currentUserId);
 }
 
-function relationForTask(task: CalendarTask): TaskRelation {
-  return isReceivedTask(task) ? "received" : "sent";
+function relationForTask(task: CalendarTask, currentUserId: string): TaskRelation {
+  return isReceivedTask(task, currentUserId) ? "received" : "sent";
+}
+
+function relationLabelForTask(task: CalendarTask, currentUserId: string) {
+  if (isReceivedTask(task, currentUserId)) return "发给我的";
+  if (isSentTask(task, currentUserId)) return "我发出的";
+  return "他人发出";
 }
 
 function initials(name: string) {
@@ -196,16 +269,115 @@ function formatTaskRange(task: CalendarTask) {
 }
 
 export function CalendarWorkspace() {
-  const [users, setUsers] = useState<CalendarUser[]>(demoUsers);
-  const [tasks, setTasks] = useState<CalendarTask[]>(demoTasks);
-  const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs("2026-07-02"));
-  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs("2026-07-02"));
+  const { message } = App.useApp();
+  const [supabase] = useState(() => (hasSupabaseConfig ? createClient() : null));
+  const [currentUser, setCurrentUser] = useState<CalendarUser | null>(null);
+  const [users, setUsers] = useState<CalendarUser[]>([]);
+  const [tasks, setTasks] = useState<CalendarTask[]>([]);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs());
+  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [calendarScope, setCalendarScope] = useState<CalendarScope>("all");
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
+  const [loginForm] = Form.useForm<LoginFormValues>();
+
+  const currentUserId = currentUser?.id || "";
+  const canManageAccounts = currentUser?.role === "admin";
+
+  const loadWorkspaceData = useCallback(async () => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    setDataLoading(true);
+    setWorkspaceError(null);
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const authUser = authData.user;
+
+    if (authError || !authUser) {
+      setCurrentUser(null);
+      setUsers([]);
+      setTasks([]);
+      setAuthLoading(false);
+      setDataLoading(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id,email,full_name,role,color")
+      .eq("id", authUser.id)
+      .maybeSingle<ProfileRow>();
+
+    if (profileError || !profile) {
+      setWorkspaceError(
+        profileError?.message || "当前账号还没有 profile，请确认已执行 schema.sql。",
+      );
+      setCurrentUser(null);
+      setAuthLoading(false);
+      setDataLoading(false);
+      return;
+    }
+
+    const currentProfile = profileToUser(profile);
+    setCurrentUser(currentProfile);
+
+    const { data: profileRows, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id,email,full_name,role,color")
+      .order("created_at", { ascending: true })
+      .returns<ProfileRow[]>();
+
+    if (profilesError) {
+      setWorkspaceError(profilesError.message);
+      setUsers([currentProfile]);
+    } else {
+      setUsers((profileRows || []).map(profileToUser));
+    }
+
+    const { data: taskRows, error: tasksError } = await supabase
+      .from("tasks")
+      .select(
+        "id,title,description,starts_at,ends_at,status,priority,created_by,task_assignees(user_id)",
+      )
+      .order("starts_at", { ascending: true })
+      .returns<TaskRow[]>();
+
+    if (tasksError) {
+      setWorkspaceError(tasksError.message);
+      setTasks([]);
+    } else {
+      setTasks((taskRows || []).map(taskRowToTask));
+    }
+
+    setAuthLoading(false);
+    setDataLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const initialLoad = window.setTimeout(() => {
+      void loadWorkspaceData();
+    }, 0);
+
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      void loadWorkspaceData();
+    });
+
+    return () => {
+      window.clearTimeout(initialLoad);
+      data.subscription.unsubscribe();
+    };
+  }, [loadWorkspaceData, supabase]);
 
   const activeTask = useMemo(
     () => tasks.find((task) => task.id === activeTaskId) || null,
@@ -230,8 +402,11 @@ export function CalendarWorkspace() {
   }, [calendarValue]);
 
   const visibleTasks = useMemo(
-    () => tasks.filter((task) => taskMatchesScope(task, calendarScope)),
-    [calendarScope, tasks],
+    () =>
+      tasks.filter((task) =>
+        taskMatchesScope(task, calendarScope, currentUserId, Boolean(canManageAccounts)),
+      ),
+    [calendarScope, canManageAccounts, currentUserId, tasks],
   );
 
   const selectedTasks = useMemo(
@@ -254,11 +429,14 @@ export function CalendarWorkspace() {
   const doneCount = monthTasks.filter((task) => task.status === "done").length;
   const completion =
     monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
-  const sentMonthCount = monthTasks.filter(isSentTask).length;
-  const receivedMonthCount = monthTasks.filter(isReceivedTask).length;
-  const canManageAccounts = currentUserRole === "admin";
+  const sentMonthCount = monthTasks.filter((task) => isSentTask(task, currentUserId)).length;
+  const receivedMonthCount = monthTasks.filter((task) =>
+    isReceivedTask(task, currentUserId),
+  ).length;
 
   const openTaskModal = (date = selectedDate) => {
+    if (!currentUserId) return;
+
     taskForm.setFieldsValue({
       range: [date.hour(9).minute(0), date.hour(18).minute(0)],
       status: "todo",
@@ -268,10 +446,90 @@ export function CalendarWorkspace() {
     setTaskModalOpen(true);
   };
 
-  const createTask = (values: TaskFormValues) => {
+  const signIn = async (values: LoginFormValues) => {
+    if (!supabase) return;
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: normalizeLoginEmail(values.email),
+      password: values.password,
+    });
+
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+
+    message.success("登录成功");
+    await loadWorkspaceData();
+  };
+
+  const signOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setUsers([]);
+    setTasks([]);
+  };
+
+  const bootstrapAdmin = async () => {
+    const response = await fetch("/api/admin/bootstrap", { method: "POST" });
+    const payload = (await response.json()) as {
+      error?: string;
+      user?: { login: string; password: string };
+    };
+
+    if (!response.ok) {
+      message.error(payload.error || "初始化管理员失败");
+      return;
+    }
+
+    loginForm.setFieldsValue({
+      email: payload.user?.login || "admin",
+      password: payload.user?.password || bootstrapAdminPassword,
+    });
+    message.success("管理员已初始化，可以登录");
+  };
+
+  const createTask = async (values: TaskFormValues) => {
+    if (!supabase || !currentUserId) return;
+
     const [start, end] = values.range;
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        title: values.title,
+        description: values.description || "暂无补充说明。",
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        status: values.status,
+        priority: values.priority,
+        created_by: currentUserId,
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (error || !data) {
+      message.error(error?.message || "创建任务失败");
+      return;
+    }
+
+    const assigneeRows = values.assigneeIds.map((userId) => ({
+      task_id: data.id,
+      user_id: userId,
+      assigned_by: currentUserId,
+    }));
+
+    const { error: assigneeError } = await supabase
+      .from("task_assignees")
+      .insert(assigneeRows);
+
+    if (assigneeError) {
+      message.error(assigneeError.message);
+      return;
+    }
+
     const nextTask: CalendarTask = {
-      id: `task-${Date.now()}`,
+      id: data.id,
       title: values.title,
       description: values.description || "暂无补充说明。",
       startsAt: start.toISOString(),
@@ -287,37 +545,131 @@ export function CalendarWorkspace() {
     setCalendarValue(start);
     setTaskModalOpen(false);
     taskForm.resetFields();
+    message.success("任务已创建");
+    await loadWorkspaceData();
   };
 
-  const createMember = (values: MemberFormValues) => {
-    const palette = ["#17a765", "#f5a623", "#e5534b", "#00a2ae", "#7f56d9"];
-    const nextUser: CalendarUser = {
-      id: `user-${Date.now()}`,
-      name: values.name,
-      email: values.email,
-      role: values.role,
-      color: palette[users.length % palette.length],
-    };
+  const createMember = async (values: MemberFormValues) => {
+    const response = await fetch("/api/admin/users", {
+      body: JSON.stringify({
+        email: values.email,
+        fullName: values.name,
+        password: values.password,
+        role: values.role,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    const payload = (await response.json()) as { error?: string };
 
-    setUsers((current) => [...current, nextUser]);
+    if (!response.ok) {
+      message.error(payload.error || "创建账号失败");
+      return;
+    }
+
+    message.success("账号已创建");
     setMemberModalOpen(false);
     memberForm.resetFields();
+    await loadWorkspaceData();
   };
 
-  const updateTaskStatus = (taskId: string, status: TaskStatus) => {
+  const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    if (!supabase) return;
+
+    const { error } = await supabase.from("tasks").update({ status }).eq("id", taskId);
+
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+
     setTasks((current) =>
       current.map((task) => (task.id === taskId ? { ...task, status } : task)),
     );
+    message.success("状态已更新");
   };
 
   const openTaskDetail = (task: CalendarTask) => {
     setActiveTaskId(task.id);
   };
 
+  if (!hasSupabaseConfig || !supabase) {
+    return (
+      <WorkspaceShell eyebrow="Supabase 配置" title="日历">
+        <div className="setup-panel">
+          <Alert
+            message="缺少 Supabase 环境变量"
+            description="请先在 .env.local 填入 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 和 SUPABASE_SECRET_KEY，然后重启 pnpm dev。"
+            type="warning"
+            showIcon
+          />
+        </div>
+      </WorkspaceShell>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <WorkspaceShell eyebrow="正在连接 Supabase" title="日历">
+        <div className="loading-panel">
+          <Spin />
+        </div>
+      </WorkspaceShell>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <WorkspaceShell eyebrow="登录工作日历" title="日历">
+        <div className="auth-shell">
+          <section className="auth-panel">
+            <Title level={4}>登录</Title>
+            <Form
+              form={loginForm}
+              initialValues={{ email: "admin", password: bootstrapAdminPassword }}
+              layout="vertical"
+              onFinish={signIn}
+            >
+              <Form.Item
+                label="账号"
+                name="email"
+                rules={[{ message: "请输入账号或邮箱", required: true }]}
+              >
+                <Input placeholder="admin 或 name@company.com" />
+              </Form.Item>
+              <Form.Item
+                label="密码"
+                name="password"
+                rules={[{ message: "请输入密码", required: true }]}
+              >
+                <Input.Password placeholder="admin123" />
+              </Form.Item>
+              <Space wrap>
+                <Button htmlType="submit" type="primary">
+                  登录
+                </Button>
+                <Button onClick={bootstrapAdmin}>初始化管理员</Button>
+              </Space>
+            </Form>
+            <Text type="secondary">
+              默认管理员：<code>admin</code> / <code>{bootstrapAdminPassword}</code>
+            </Text>
+            {workspaceError ? (
+              <Alert message={workspaceError} showIcon type="error" />
+            ) : null}
+          </section>
+        </div>
+      </WorkspaceShell>
+    );
+  }
+
   return (
     <WorkspaceShell
       actions={
         <Space size={12} wrap>
+          <Button loading={dataLoading} onClick={loadWorkspaceData}>
+            刷新
+          </Button>
           {canManageAccounts ? (
             <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
               账号管理
@@ -330,13 +682,17 @@ export function CalendarWorkspace() {
           >
             新增任务
           </Button>
-          <Avatar className="profile-avatar">{initials("田中太郎")}</Avatar>
+          <Button onClick={signOut}>退出</Button>
+          <Avatar className="profile-avatar">{initials(currentUser.name)}</Avatar>
         </Space>
       }
       title="日历"
     >
       <div className="content-grid calendar-content-grid">
         <section className="calendar-panel">
+          {workspaceError ? (
+            <Alert className="workspace-error" message={workspaceError} showIcon type="error" />
+          ) : null}
           <div className="calendar-header">
             <Flex align="center" gap={10}>
               <Title level={4}>{calendarValue.format("YYYY年M月")}</Title>
@@ -374,6 +730,7 @@ export function CalendarWorkspace() {
             onCreateTask={openTaskModal}
             onSelectDate={setSelectedDate}
             onSelectTask={openTaskDetail}
+            currentUserId={currentUserId}
             selectedDate={selectedDate}
             tasks={visibleTasks}
             weeks={calendarWeeks}
@@ -404,6 +761,7 @@ export function CalendarWorkspace() {
               selectedTasks.map((task) => (
                 <TaskDetailCard
                   key={task.id}
+                  currentUserId={currentUserId}
                   onOpen={openTaskDetail}
                   task={task}
                   userById={userById}
@@ -483,6 +841,7 @@ export function CalendarWorkspace() {
       <TaskActionModal
         onClose={() => setActiveTaskId(null)}
         onStatusChange={updateTaskStatus}
+        currentUserId={currentUserId}
         task={activeTask}
         userById={userById}
       />
@@ -532,6 +891,13 @@ export function CalendarWorkspace() {
           >
             <Input placeholder="name@company.com" />
           </Form.Item>
+          <Form.Item
+            label="初始密码"
+            name="password"
+            rules={[{ message: "请输入初始密码", required: true }]}
+          >
+            <Input.Password placeholder="至少 6 位" />
+          </Form.Item>
           <Form.Item label="角色" name="role">
             <Select
               options={[
@@ -541,8 +907,7 @@ export function CalendarWorkspace() {
             />
           </Form.Item>
           <Text type="secondary">
-            当前是前端原型新增；接入 Supabase 后会调用
-            <code> /api/admin/users</code> 创建真实登录账号。
+            这里会调用 <code>/api/admin/users</code> 创建真实 Supabase Auth 账号。
           </Text>
         </Form>
       </Modal>
@@ -552,6 +917,7 @@ export function CalendarWorkspace() {
 
 function MonthRangeCalendar({
   calendarValue,
+  currentUserId,
   onCreateTask,
   onSelectDate,
   onSelectTask,
@@ -560,6 +926,7 @@ function MonthRangeCalendar({
   weeks,
 }: {
   calendarValue: Dayjs;
+  currentUserId: string;
   onCreateTask: (date: Dayjs) => void;
   onSelectDate: (date: Dayjs) => void;
   onSelectTask: (task: CalendarTask) => void;
@@ -617,8 +984,9 @@ function MonthRangeCalendar({
             <div className="range-event-layer">
               {weekTasks.slice(0, visibleWeekEventCount).map((task, index) => {
                 const segment = clampTaskToWeek(task, weekStart);
-                const relation = relationForTask(task);
+                const relation = relationForTask(task, currentUserId);
                 const relationStyle = relationMeta[relation];
+                const relationLabel = relationLabelForTask(task, currentUserId);
                 const priority = priorityMeta[task.priority];
                 const priorityColor = prioritySignalColor[task.priority];
 
@@ -645,7 +1013,7 @@ function MonthRangeCalendar({
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
                       gridRow: index + 1,
                     } as CSSProperties}
-                    title={`${task.title} · ${relationStyle.label} · 优先级${priority.label}`}
+                    title={`${task.title} · ${relationLabel} · 优先级${priority.label}`}
                     type="button"
                   >
                     <span
@@ -675,10 +1043,12 @@ function MonthRangeCalendar({
 }
 
 function TaskDetailCard({
+  currentUserId,
   onOpen,
   task,
   userById,
 }: {
+  currentUserId: string;
   onOpen: (task: CalendarTask) => void;
   task: CalendarTask;
   userById: Map<string, CalendarUser>;
@@ -688,8 +1058,9 @@ function TaskDetailCard({
     .filter(Boolean) as CalendarUser[];
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
-  const relation = relationForTask(task);
+  const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
+  const relationLabel = relationLabelForTask(task, currentUserId);
 
   return (
     <button
@@ -703,7 +1074,7 @@ function TaskDetailCard({
           <Text type="secondary">{formatTaskRange(task)}</Text>
         </div>
         <Space size={6}>
-          <Tag color={relationStyle.color}>{relationStyle.label}</Tag>
+          <Tag color={relationStyle.color}>{relationLabel}</Tag>
           <Tag color={status.color}>{status.label}</Tag>
         </Space>
       </div>
@@ -732,11 +1103,13 @@ function TaskDetailCard({
 }
 
 function TaskActionModal({
+  currentUserId,
   onClose,
   onStatusChange,
   task,
   userById,
 }: {
+  currentUserId: string;
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => void;
   task: CalendarTask | null;
@@ -749,8 +1122,9 @@ function TaskActionModal({
     .filter(Boolean) as CalendarUser[];
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
-  const relation = relationForTask(task);
+  const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
+  const relationLabel = relationLabelForTask(task, currentUserId);
 
   return (
     <Modal
@@ -771,7 +1145,7 @@ function TaskActionModal({
     >
       <div className="task-action-body">
         <div className="task-action-status">
-          <Tag color={relationStyle.color}>{relationStyle.label}</Tag>
+          <Tag color={relationStyle.color}>{relationLabel}</Tag>
           <Tag color={status.color}>{status.label}</Tag>
           <Tag color={priority.color}>优先级 {priority.label}</Tag>
         </div>
