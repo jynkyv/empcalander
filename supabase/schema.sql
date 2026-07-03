@@ -181,7 +181,7 @@ drop policy if exists tasks_delete_owner_or_admin on public.tasks;
 create policy tasks_delete_owner_or_admin
 on public.tasks for delete
 to authenticated
-using (created_by = auth.uid() or public.is_admin());
+using (created_by = auth.uid());
 
 drop policy if exists task_assignees_read_visible on public.task_assignees;
 create policy task_assignees_read_visible

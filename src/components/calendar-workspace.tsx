@@ -109,7 +109,6 @@ type TaskFormValues = {
 
 type MemberFormValues = {
   account: string;
-  name: string;
   password: string;
   role: "admin" | "member";
 };
@@ -194,7 +193,7 @@ function clampTaskToWeek(task: CalendarTask, weekStart: Dayjs) {
 function profileToUser(profile: ProfileRow): CalendarUser {
   return {
     id: profile.id,
-    name: profile.full_name,
+    name: emailToAccount(profile.email) || profile.full_name,
     email: profile.email,
     role: profile.role,
     color: profile.color || "#2f6fed",
@@ -284,6 +283,7 @@ export function CalendarWorkspace({
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
 
@@ -510,7 +510,6 @@ export function CalendarWorkspace({
     const response = await fetch("/api/admin/users", {
       body: JSON.stringify({
         account: values.account,
-        fullName: values.name,
         password: values.password,
         role: values.role,
       }),
@@ -547,6 +546,27 @@ export function CalendarWorkspace({
 
     message.success("账号已删除");
     await loadWorkspaceData();
+  };
+
+  const deleteTask = async (task: CalendarTask) => {
+    if (!supabase || task.createdBy !== currentUserId) return;
+
+    setDeletingTaskId(task.id);
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", task.id)
+      .eq("created_by", currentUserId);
+    setDeletingTaskId(null);
+
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+
+    setActiveTaskId(null);
+    await loadWorkspaceData();
+    message.success("任务已删除");
   };
 
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
@@ -779,8 +799,10 @@ export function CalendarWorkspace({
 
       <TaskActionModal
         onClose={() => setActiveTaskId(null)}
+        onDelete={deleteTask}
         onStatusChange={updateTaskStatus}
         currentUserId={currentUserId}
+        deleting={activeTask?.id === deletingTaskId}
         task={activeTask}
         userById={userById}
       />
@@ -799,7 +821,6 @@ export function CalendarWorkspace({
               <Avatar style={{ backgroundColor: user.color }}>{initials(user.name)}</Avatar>
               <div>
                 <div className="account-name">{user.name}</div>
-                <Text type="secondary">{emailToAccount(user.email)}</Text>
               </div>
               <Tag color={user.role === "admin" ? "blue" : "default"}>
                 {user.role === "admin" ? "管理员" : "员工"}
@@ -847,13 +868,6 @@ export function CalendarWorkspace({
             ]}
           >
             <Input placeholder="例如 张三" />
-          </Form.Item>
-          <Form.Item
-            label="姓名"
-            name="name"
-            rules={[{ message: "请输入姓名", required: true }]}
-          >
-            <Input placeholder="员工姓名" />
           </Form.Item>
           <Form.Item
             label="初始密码"
@@ -1019,6 +1033,7 @@ function TaskDetailCard({
     .filter(Boolean) as CalendarUser[];
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
+  const creator = userById.get(task.createdBy);
   const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
@@ -1049,6 +1064,7 @@ function TaskDetailCard({
       />
       <div className="task-meta">
         <Tag color={priority.color}>优先级 {priority.label}</Tag>
+        <Tag>发起人 {creator?.name || "未知"}</Tag>
         <Avatar.Group max={{ count: 3 }}>
           {assignees.map((user) => (
             <Tooltip key={user.id} title={user.name}>
@@ -1065,12 +1081,16 @@ function TaskDetailCard({
 
 function TaskActionModal({
   currentUserId,
+  deleting,
+  onDelete,
   onClose,
   onStatusChange,
   task,
   userById,
 }: {
   currentUserId: string;
+  deleting: boolean;
+  onDelete: (task: CalendarTask) => void;
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => void;
   task: CalendarTask | null;
@@ -1081,16 +1101,32 @@ function TaskActionModal({
   const assignees = task.assigneeIds
     .map((id) => userById.get(id))
     .filter(Boolean) as CalendarUser[];
+  const creator = userById.get(task.createdBy);
   const status = statusMeta[task.status];
   const priority = priorityMeta[task.priority];
   const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
+  const canDelete = task.createdBy === currentUserId;
 
   return (
     <Modal
       footer={
         <Space wrap>
+          {canDelete ? (
+            <Popconfirm
+              cancelText="取消"
+              description="删除后无法恢复，确定删除这个任务吗？"
+              okButtonProps={{ danger: true }}
+              okText="删除"
+              onConfirm={() => onDelete(task)}
+              title="删除任务"
+            >
+              <Button danger icon={<DeleteOutlined />} loading={deleting}>
+                删除任务
+              </Button>
+            </Popconfirm>
+          ) : null}
           <Button onClick={() => onStatusChange(task.id, "todo")}>待处理</Button>
           <Button onClick={() => onStatusChange(task.id, "doing")} type="primary">
             开始处理
@@ -1113,6 +1149,10 @@ function TaskActionModal({
         <div className="task-action-row">
           <Text type="secondary">时间范围</Text>
           <Text>{formatTaskRange(task)}</Text>
+        </div>
+        <div className="task-action-row">
+          <Text type="secondary">发起人</Text>
+          <Text>{creator?.name || "未知"}</Text>
         </div>
         <div className="task-action-row">
           <Text type="secondary">负责人</Text>

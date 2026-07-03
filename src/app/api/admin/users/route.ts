@@ -9,7 +9,6 @@ import { getSupabaseAdminConfig } from "@/lib/supabase/env";
 
 type CreateUserBody = {
   account?: string;
-  fullName?: string;
   password?: string;
   role?: "admin" | "member";
 };
@@ -71,13 +70,12 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as CreateUserBody;
   const account = body.account?.trim().toLowerCase();
-  const fullName = body.fullName?.trim();
   const password = body.password;
   const role = body.role || "member";
 
-  if (!account || !fullName || !password) {
+  if (!account || !password) {
     return NextResponse.json(
-      { error: "account, fullName and password are required." },
+      { error: "account and password are required." },
       { status: 400 },
     );
   }
@@ -103,7 +101,7 @@ export async function POST(request: Request) {
     password,
     email_confirm: true,
     user_metadata: {
-      full_name: fullName,
+      full_name: account,
       role,
     },
   });
@@ -118,7 +116,7 @@ export async function POST(request: Request) {
   const { error: upsertError } = await admin.from("profiles").upsert({
     id: data.user.id,
     email,
-    full_name: fullName,
+    full_name: account,
     role,
     created_by: requesterId,
   });
@@ -130,7 +128,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     user: {
       account,
-      fullName,
       id: data.user.id,
       role,
     },
@@ -165,6 +162,15 @@ export async function DELETE(request: Request) {
       { error: "Cannot delete your own account." },
       { status: 400 },
     );
+  }
+
+  const { error: tasksError } = await admin
+    .from("tasks")
+    .delete()
+    .eq("created_by", userId);
+
+  if (tasksError) {
+    return NextResponse.json({ error: tasksError.message }, { status: 400 });
   }
 
   const { error } = await admin.auth.admin.deleteUser(userId);
