@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Alert,
   App,
@@ -32,6 +33,7 @@ import {
   UserAddOutlined,
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
+import { hasSupabaseConfig } from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CalendarTask,
@@ -44,13 +46,6 @@ const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
-const bootstrapAdminEmail = "admin@ag.local";
-const bootstrapAdminPassword = "admin123";
-const hasSupabaseConfig = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-);
 
 type CalendarScope = "all" | "sent" | "received";
 type TaskRelation = "sent" | "received";
@@ -110,11 +105,6 @@ type MemberFormValues = {
   email: string;
   password: string;
   role: "admin" | "member";
-};
-
-type LoginFormValues = {
-  email: string;
-  password: string;
 };
 
 type ProfileRow = {
@@ -218,11 +208,6 @@ function taskRowToTask(task: TaskRow): CalendarTask {
   };
 }
 
-function normalizeLoginEmail(value: string) {
-  const email = value.trim().toLowerCase();
-  return email === "admin" ? bootstrapAdminEmail : email;
-}
-
 function isSentTask(task: CalendarTask, currentUserId: string) {
   return task.createdBy === currentUserId;
 }
@@ -269,6 +254,7 @@ function formatTaskRange(task: CalendarTask) {
 }
 
 export function CalendarWorkspace() {
+  const router = useRouter();
   const { message } = App.useApp();
   const [supabase] = useState(() => (hasSupabaseConfig ? createClient() : null));
   const [currentUser, setCurrentUser] = useState<CalendarUser | null>(null);
@@ -285,7 +271,6 @@ export function CalendarWorkspace() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
-  const [loginForm] = Form.useForm<LoginFormValues>();
 
   const currentUserId = currentUser?.id || "";
   const canManageAccounts = currentUser?.role === "admin";
@@ -379,6 +364,11 @@ export function CalendarWorkspace() {
     };
   }, [loadWorkspaceData, supabase]);
 
+  useEffect(() => {
+    if (!hasSupabaseConfig || authLoading || currentUser) return;
+    router.replace("/login");
+  }, [authLoading, currentUser, router]);
+
   const activeTask = useMemo(
     () => tasks.find((task) => task.id === activeTaskId) || null,
     [activeTaskId, tasks],
@@ -446,48 +436,13 @@ export function CalendarWorkspace() {
     setTaskModalOpen(true);
   };
 
-  const signIn = async (values: LoginFormValues) => {
-    if (!supabase) return;
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: normalizeLoginEmail(values.email),
-      password: values.password,
-    });
-
-    if (error) {
-      message.error(error.message);
-      return;
-    }
-
-    message.success("登录成功");
-    await loadWorkspaceData();
-  };
-
   const signOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
     setCurrentUser(null);
     setUsers([]);
     setTasks([]);
-  };
-
-  const bootstrapAdmin = async () => {
-    const response = await fetch("/api/admin/bootstrap", { method: "POST" });
-    const payload = (await response.json()) as {
-      error?: string;
-      user?: { login: string; password: string };
-    };
-
-    if (!response.ok) {
-      message.error(payload.error || "初始化管理员失败");
-      return;
-    }
-
-    loginForm.setFieldsValue({
-      email: payload.user?.login || "admin",
-      password: payload.user?.password || bootstrapAdminPassword,
-    });
-    message.success("管理员已初始化，可以登录");
+    router.replace("/login");
   };
 
   const createTask = async (values: TaskFormValues) => {
@@ -528,25 +483,12 @@ export function CalendarWorkspace() {
       return;
     }
 
-    const nextTask: CalendarTask = {
-      id: data.id,
-      title: values.title,
-      description: values.description || "暂无补充说明。",
-      startsAt: start.toISOString(),
-      endsAt: end.toISOString(),
-      status: values.status,
-      priority: values.priority,
-      createdBy: currentUserId,
-      assigneeIds: values.assigneeIds,
-    };
-
-    setTasks((current) => [...current, nextTask]);
     setSelectedDate(start);
     setCalendarValue(start);
     setTaskModalOpen(false);
     taskForm.resetFields();
-    message.success("任务已创建");
     await loadWorkspaceData();
+    message.success("任务已创建");
   };
 
   const createMember = async (values: MemberFormValues) => {
@@ -583,9 +525,7 @@ export function CalendarWorkspace() {
       return;
     }
 
-    setTasks((current) =>
-      current.map((task) => (task.id === taskId ? { ...task, status } : task)),
-    );
+    await loadWorkspaceData();
     message.success("状态已更新");
   };
 
@@ -620,44 +560,9 @@ export function CalendarWorkspace() {
 
   if (!currentUser) {
     return (
-      <WorkspaceShell eyebrow="登录工作日历" title="日历">
-        <div className="auth-shell">
-          <section className="auth-panel">
-            <Title level={4}>登录</Title>
-            <Form
-              form={loginForm}
-              initialValues={{ email: "admin", password: bootstrapAdminPassword }}
-              layout="vertical"
-              onFinish={signIn}
-            >
-              <Form.Item
-                label="账号"
-                name="email"
-                rules={[{ message: "请输入账号或邮箱", required: true }]}
-              >
-                <Input placeholder="admin 或 name@company.com" />
-              </Form.Item>
-              <Form.Item
-                label="密码"
-                name="password"
-                rules={[{ message: "请输入密码", required: true }]}
-              >
-                <Input.Password placeholder="admin123" />
-              </Form.Item>
-              <Space wrap>
-                <Button htmlType="submit" type="primary">
-                  登录
-                </Button>
-                <Button onClick={bootstrapAdmin}>初始化管理员</Button>
-              </Space>
-            </Form>
-            <Text type="secondary">
-              默认管理员：<code>admin</code> / <code>{bootstrapAdminPassword}</code>
-            </Text>
-            {workspaceError ? (
-              <Alert message={workspaceError} showIcon type="error" />
-            ) : null}
-          </section>
+      <WorkspaceShell eyebrow="正在跳转登录页" title="日历">
+        <div className="loading-panel">
+          <Spin />
         </div>
       </WorkspaceShell>
     );

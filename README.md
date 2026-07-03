@@ -30,6 +30,8 @@ pnpm dev
 
 打开 http://localhost:3000。
 
+登录页是 http://localhost:3000/login。未登录访问首页会自动跳转到登录页，退出登录后也会回到登录页。
+
 ## Supabase 配置
 
 复制环境变量示例：
