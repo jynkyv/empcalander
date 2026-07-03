@@ -1,5 +1,4 @@
-export const bootstrapAdminEmail = "admin@ag.local";
-export const bootstrapAdminPassword = "admin123";
+export const adminAliasEmail = "admin@ag.local";
 
 export type SupabaseBrowserConfig = {
   supabasePublishableKey?: string;
@@ -12,5 +11,5 @@ export function hasSupabaseConfig(config: SupabaseBrowserConfig) {
 
 export function normalizeLoginEmail(value: string) {
   const email = value.trim().toLowerCase();
-  return email === "admin" ? bootstrapAdminEmail : email;
+  return email === "admin" ? adminAliasEmail : email;
 }

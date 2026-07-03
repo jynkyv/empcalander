@@ -821,9 +821,6 @@ export function CalendarWorkspace({
               ]}
             />
           </Form.Item>
-          <Text type="secondary">
-            这里会调用 <code>/api/admin/users</code> 创建真实 Supabase Auth 账号。
-          </Text>
         </Form>
       </Modal>
     </WorkspaceShell>

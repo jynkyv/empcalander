@@ -18,7 +18,6 @@ Next.js + Supabase 的员工任务日历后台。当前版本使用 Supabase Aut
 - 右侧日期任务详情面板
 - 任务详情弹窗与状态操作
 - Supabase SSR 客户端与 Next 16 `proxy.ts`
-- 初始化管理员 API：`POST /api/admin/bootstrap`
 - 管理员创建用户 API：`POST /api/admin/users`
 - 初始数据库 schema：`supabase/schema.sql`
 
@@ -47,8 +46,6 @@ SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 SUPABASE_JWKS_URL=
-BOOTSTRAP_ADMIN_EMAIL=admin@ag.local
-BOOTSTRAP_ADMIN_PASSWORD=admin123
 ```
 
 然后在 Supabase SQL Editor 执行：
@@ -58,15 +55,6 @@ supabase/schema.sql
 ```
 
 `SUPABASE_SECRET_KEY` 只用于服务端管理员开户接口，不要暴露到浏览器。`SUPABASE_PUBLISHABLE_KEY` 会传给浏览器端 Supabase client。`SUPABASE_JWKS_URL` 保留给服务端 JWT 校验配置。
-
-第一次使用时，打开页面点击“初始化管理员”，系统会在没有任何管理员时创建默认账号：
-
-```text
-账号：admin
-密码：admin123
-```
-
-实际 Supabase Auth 邮箱是 `admin@ag.local`。登录框输入 `admin` 会自动映射到这个邮箱。
 
 ## 后续需要确认
 

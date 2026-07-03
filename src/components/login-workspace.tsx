@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Alert, App, Button, Form, Input, Space, Spin, Typography } from "antd";
+import { Alert, App, Button, Form, Input, Spin, Typography } from "antd";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import {
-  bootstrapAdminPassword,
   hasSupabaseConfig,
   normalizeLoginEmail,
   type SupabaseBrowserConfig,
 } from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/client";
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 
 type LoginFormValues = {
   email: string;
@@ -26,14 +25,12 @@ export function LoginWorkspace({
 }) {
   const router = useRouter();
   const { message } = App.useApp();
-  const [form] = Form.useForm<LoginFormValues>();
   const hasConfig = hasSupabaseConfig(supabaseConfig);
   const [supabase] = useState(() =>
     hasConfig ? createClient(supabaseConfig) : null,
   );
   const [checkingSession, setCheckingSession] = useState(hasConfig);
   const [submitting, setSubmitting] = useState(false);
-  const [bootstrapping, setBootstrapping] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -70,27 +67,6 @@ export function LoginWorkspace({
     router.replace("/");
   };
 
-  const bootstrapAdmin = async () => {
-    setBootstrapping(true);
-    const response = await fetch("/api/admin/bootstrap", { method: "POST" });
-    const payload = (await response.json()) as {
-      error?: string;
-      user?: { login: string; password: string };
-    };
-    setBootstrapping(false);
-
-    if (!response.ok) {
-      message.error(payload.error || "初始化管理员失败");
-      return;
-    }
-
-    form.setFieldsValue({
-      email: payload.user?.login || "admin",
-      password: payload.user?.password || bootstrapAdminPassword,
-    });
-    message.success("管理员已初始化，可以登录");
-  };
-
   if (!hasConfig || !supabase) {
     return (
       <WorkspaceShell eyebrow="Supabase 配置" title="登录">
@@ -121,38 +97,25 @@ export function LoginWorkspace({
       <div className="auth-shell">
         <section className="auth-panel">
           <Title level={4}>登录</Title>
-          <Form
-            form={form}
-            initialValues={{ email: "admin", password: bootstrapAdminPassword }}
-            layout="vertical"
-            onFinish={signIn}
-          >
+          <Form layout="vertical" onFinish={signIn}>
             <Form.Item
               label="账号"
               name="email"
               rules={[{ message: "请输入账号或邮箱", required: true }]}
             >
-              <Input placeholder="admin 或 name@company.com" />
+              <Input placeholder="账号或邮箱" />
             </Form.Item>
             <Form.Item
               label="密码"
               name="password"
               rules={[{ message: "请输入密码", required: true }]}
             >
-              <Input.Password placeholder="admin123" />
+              <Input.Password placeholder="请输入密码" />
             </Form.Item>
-            <Space wrap>
-              <Button htmlType="submit" loading={submitting} type="primary">
-                登录
-              </Button>
-              <Button loading={bootstrapping} onClick={bootstrapAdmin}>
-                初始化管理员
-              </Button>
-            </Space>
+            <Button htmlType="submit" loading={submitting} type="primary">
+              登录
+            </Button>
           </Form>
-          <Text type="secondary">
-            默认管理员：<code>admin</code> / <code>{bootstrapAdminPassword}</code>
-          </Text>
         </section>
       </div>
     </WorkspaceShell>
