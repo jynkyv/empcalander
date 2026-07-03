@@ -1,4 +1,4 @@
-# AG集团工作日历
+# AG GROUP 工作日历
 
 Next.js + Supabase 的员工任务日历后台。当前版本使用 Supabase Auth、Postgres 和 RLS 作为真实数据源。
 

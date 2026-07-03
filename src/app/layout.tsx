@@ -4,7 +4,7 @@ import { AppProviders } from "@/components/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AG集团工作日历",
+  title: "AG GROUP 工作日历",
   description: "员工任务指派与工作日历管理后台",
 };
 

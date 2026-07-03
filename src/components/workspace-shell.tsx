@@ -27,7 +27,7 @@ export function WorkspaceShell({
             <div className="brand topbar-brand">
               <div className="brand-mark">A</div>
               <div>
-                <div className="brand-name">AG集团</div>
+                <div className="brand-name">AG GROUP</div>
                 <div className="brand-subtitle">工作日历</div>
               </div>
             </div>
