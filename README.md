@@ -1,45 +1,48 @@
-# AG GROUP 工作日历
+# AG GROUP 勤務カレンダー
 
-Next.js + Supabase 的员工任务日历后台。当前版本使用 Supabase Auth、Postgres 和 RLS 作为真实数据源。
+Next.js + Supabase の従業員タスク管理カレンダーです。Supabase Auth、Postgres、RLS を実データソースとして使用します。
 
-## 技术选型
+## 技術構成
 
 - Next.js App Router + TypeScript
-- Ant Design：后台组件库，已接入 App Router 样式注册器
-- Supabase：Auth、Postgres、RLS
-- dayjs：Ant Design 日期组件默认日期对象
+- Ant Design
+- Supabase Auth / Postgres / RLS
+- dayjs
 
-## 已实现
+## 実装済み
 
-- 单页日历工作台
-- 月视图任务日历，支持跨日期时间范围展示
-- Supabase 登录、任务创建、状态更新和任务指派
-- 管理员账号管理弹窗
-- 右侧日期任务详情面板
-- 任务详情弹窗与状态操作
-- Supabase SSR 客户端与 Next 16 `proxy.ts`
-- 管理员账号创建/删除 API：`/api/admin/users`
-- 初始数据库 schema：`supabase/schema.sql`
+- 月表示の勤務カレンダー
+- 日本の土日・国民の祝日・休日の表示
+- タスク作成、担当者選択、ステータス更新、削除
+- 自分が依頼したタスク / 自分宛てのタスクの切り替え
+- 管理者のアカウント作成・削除
+- 右側の日別タスク詳細
+- Supabase SSR client と Next 16 `proxy.ts`
+- 管理者 API：`/api/admin/users`
+- 全ユーザー取得 API：`/api/users`
+- 初期データベース schema：`supabase/schema.sql`
 
-## 本地运行
+祝日・休日データは内閣府公開の「国民の祝日」を基に、2025年から2027年までを収録しています。
+
+## ローカル実行
 
 ```bash
 pnpm dev
 ```
 
-打开 http://localhost:3000。
+http://localhost:3000 を開きます。
 
-登录页是 http://localhost:3000/login。未登录访问首页会自动跳转到登录页，退出登录后也会回到登录页。
+ログインページは http://localhost:3000/login です。未ログインでトップページへアクセスするとログインページへ移動します。
 
-## Supabase 配置
+## Supabase 設定
 
-复制环境变量示例：
+環境変数ファイルを作成します。
 
 ```bash
 cp .env.example .env.local
 ```
 
-填入：
+`.env.local` に以下を設定します。
 
 ```bash
 SUPABASE_URL=
@@ -48,51 +51,16 @@ SUPABASE_SECRET_KEY=
 SUPABASE_JWKS_URL=
 ```
 
-然后在 Supabase SQL Editor 执行：
+Supabase SQL Editor で次を実行します。
 
 ```bash
 supabase/schema.sql
 ```
 
-`SUPABASE_SECRET_KEY` 只用于服务端管理员开户接口，不要暴露到浏览器。`SUPABASE_PUBLISHABLE_KEY` 会传给浏览器端 Supabase client。`SUPABASE_JWKS_URL` 保留给服务端 JWT 校验配置。
+`SUPABASE_SECRET_KEY` はサーバー側の管理 API だけで使用します。ブラウザへ公開しないでください。`SUPABASE_PUBLISHABLE_KEY` はブラウザ側 Supabase client に渡されます。
 
-## 后续需要确认
+## 確認待ち
 
-- 任务是否需要重复任务、附件和评论。
-- 任务指派后是否需要接收人确认，还是管理员直接生效。
-- 是否需要周视图、日视图和拖拽改期。
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 繰り返しタスク、添付、コメントが必要か。
+- 依頼されたタスクに承認フローが必要か。
+- 週表示、日表示、ドラッグによる日程変更が必要か。

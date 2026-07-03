@@ -69,11 +69,11 @@ export function LoginWorkspace({
 
   if (!hasConfig || !supabase) {
     return (
-      <WorkspaceShell eyebrow="Supabase 配置" title="登录">
+      <WorkspaceShell eyebrow="Supabase 設定" title="ログイン">
         <div className="setup-panel">
           <Alert
-            description="请先在 .env.local 填入 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY 和 SUPABASE_JWKS_URL，然后重启 pnpm dev。"
-            message="缺少 Supabase 环境变量"
+            description=".env.local に SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY、SUPABASE_JWKS_URL を設定してから pnpm dev を再起動してください。"
+            message="Supabase 環境変数が不足しています"
             showIcon
             type="warning"
           />
@@ -84,7 +84,7 @@ export function LoginWorkspace({
 
   if (checkingSession) {
     return (
-      <WorkspaceShell eyebrow="正在检查登录状态" title="登录">
+      <WorkspaceShell eyebrow="ログイン状態を確認中" title="ログイン">
         <div className="loading-panel">
           <Spin />
         </div>
@@ -93,27 +93,27 @@ export function LoginWorkspace({
   }
 
   return (
-    <WorkspaceShell eyebrow="登录工作日历" title="登录">
+    <WorkspaceShell eyebrow="勤務カレンダーにログイン" title="ログイン">
       <div className="auth-shell">
         <section className="auth-panel">
-          <Title level={4}>登录</Title>
+          <Title level={4}>ログイン</Title>
           <Form layout="vertical" onFinish={signIn}>
             <Form.Item
-              label="账号"
+              label="アカウント"
               name="account"
-              rules={[{ message: "请输入账号", required: true }]}
+              rules={[{ message: "アカウントを入力してください", required: true }]}
             >
-              <Input placeholder="请输入账号" />
+              <Input placeholder="アカウントを入力" />
             </Form.Item>
             <Form.Item
-              label="密码"
+              label="パスワード"
               name="password"
-              rules={[{ message: "请输入密码", required: true }]}
+              rules={[{ message: "パスワードを入力してください", required: true }]}
             >
-              <Input.Password placeholder="请输入密码" />
+              <Input.Password placeholder="パスワードを入力" />
             </Form.Item>
             <Button htmlType="submit" loading={submitting} type="primary">
-              登录
+              ログイン
             </Button>
           </Form>
         </section>

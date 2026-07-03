@@ -16,14 +16,14 @@ export async function GET() {
   const claims = await supabase.auth.getClaims();
 
   if (claims.error || !claims.data?.claims.sub) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ error: "認証が必要です。" }, { status: 401 });
   }
 
   const adminConfig = getSupabaseAdminConfig();
 
   if (!adminConfig) {
     return NextResponse.json(
-      { error: "Missing Supabase admin environment variables." },
+      { error: "Supabase 管理用の環境変数が不足しています。" },
       { status: 500 },
     );
   }

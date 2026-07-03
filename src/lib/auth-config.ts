@@ -66,19 +66,19 @@ export function getAccountValidationError(value: string) {
   const account = value.trim().toLowerCase();
 
   if (!account) {
-    return "请输入账号";
+    return "アカウントを入力してください";
   }
 
   if (account.includes("@")) {
-    return "账号不能包含 @";
+    return "アカウントに @ は使用できません";
   }
 
   if (!accountPattern.test(account)) {
-    return "账号可使用中文、字母、数字、点、横线和下划线";
+    return "アカウントは日本語、英数字、ドット、ハイフン、アンダースコアを使用できます";
   }
 
   if (accountLocalPart(account).length > 64) {
-    return "账号过长";
+    return "アカウントが長すぎます";
   }
 
   return null;

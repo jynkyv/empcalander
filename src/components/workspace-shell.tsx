@@ -16,7 +16,7 @@ type WorkspaceShellProps = {
 export function WorkspaceShell({
   actions,
   children,
-  eyebrow = "管理员工作台",
+  eyebrow = "管理者ワークスペース",
   title,
 }: WorkspaceShellProps) {
   return (
@@ -28,7 +28,7 @@ export function WorkspaceShell({
               <div className="brand-mark">A</div>
               <div>
                 <div className="brand-name">AG GROUP</div>
-                <div className="brand-subtitle">工作日历</div>
+                <div className="brand-subtitle">勤務カレンダー</div>
               </div>
             </div>
             <div className="topbar-title">

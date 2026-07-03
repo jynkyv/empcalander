@@ -1,14 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
+import dayjs from "dayjs";
 import { App, ConfigProvider, theme } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import "dayjs/locale/zh-cn";
+import jaJP from "antd/locale/ja_JP";
+import "dayjs/locale/ja";
+
+dayjs.locale("ja");
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={jaJP}
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
@@ -17,7 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
           colorBgLayout: "#f4f7fb",
           colorText: "#172033",
           fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif",
         },
         components: {
           Button: {

@@ -41,6 +41,7 @@ import {
   hasSupabaseConfig,
   type SupabaseBrowserConfig,
 } from "@/lib/auth-config";
+import { getJapanRestDay } from "@/lib/japan-holidays";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CalendarTask,
@@ -52,7 +53,7 @@ import type {
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
-const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
+const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 
 type CalendarScope = "all" | "sent" | "received";
 type TaskRelation = "sent" | "received";
@@ -61,14 +62,14 @@ const statusMeta: Record<
   TaskStatus,
   { label: string; color: string; progress: number }
 > = {
-  todo: { label: "待处理", color: "#7f56d9", progress: 10 },
-  doing: { label: "进行中", color: "#2f6fed", progress: 65 },
-  done: { label: "已完成", color: "#17a765", progress: 100 },
+  todo: { label: "未着手", color: "#7f56d9", progress: 10 },
+  doing: { label: "進行中", color: "#2f6fed", progress: 65 },
+  done: { label: "完了", color: "#17a765", progress: 100 },
 };
 
 const priorityMeta: Record<TaskPriority, { label: string; color: string }> = {
   low: { label: "低", color: "default" },
-  normal: { label: "普通", color: "blue" },
+  normal: { label: "通常", color: "blue" },
   high: { label: "高", color: "red" },
 };
 
@@ -83,14 +84,14 @@ const relationMeta: Record<
   { label: string; color: string; mid: string; soft: string; trail: string }
 > = {
   sent: {
-    label: "我发出的",
+    label: "自分が依頼",
     color: "#2f6fed",
     mid: "#dce9ff",
     soft: "#eef5ff",
     trail: "#e7eefc",
   },
   received: {
-    label: "发给我的",
+    label: "自分宛て",
     color: "#f59e0b",
     mid: "#ffedc2",
     soft: "#fff7e6",
@@ -135,16 +136,13 @@ type TaskRow = {
 
 function startOfCalendarMonth(month: Dayjs) {
   const firstDay = month.startOf("month");
-  const weekday = firstDay.day();
-  const offset = weekday === 0 ? 6 : weekday - 1;
 
-  return firstDay.subtract(offset, "day");
+  return firstDay.subtract(firstDay.day(), "day");
 }
 
 function endOfCalendarMonth(month: Dayjs) {
   const lastDay = month.endOf("month").startOf("day");
-  const weekday = lastDay.day();
-  const offset = weekday === 0 ? 0 : 7 - weekday;
+  const offset = 6 - lastDay.day();
 
   return lastDay.add(offset, "day");
 }
@@ -204,7 +202,7 @@ function taskRowToTask(task: TaskRow): CalendarTask {
   return {
     id: task.id,
     title: task.title,
-    description: task.description || "暂无补充说明。",
+    description: task.description || "補足説明はありません。",
     startsAt: task.starts_at,
     endsAt: task.ends_at || undefined,
     status: task.status,
@@ -239,9 +237,9 @@ function relationForTask(task: CalendarTask, currentUserId: string): TaskRelatio
 }
 
 function relationLabelForTask(task: CalendarTask, currentUserId: string) {
-  if (isReceivedTask(task, currentUserId)) return "发给我的";
-  if (isSentTask(task, currentUserId)) return "我发出的";
-  return "他人发出";
+  if (isReceivedTask(task, currentUserId)) return "自分宛て";
+  if (isSentTask(task, currentUserId)) return "自分が依頼";
+  return "他ユーザーが依頼";
 }
 
 function initials(name: string) {
@@ -253,10 +251,10 @@ function formatTaskRange(task: CalendarTask) {
   const end = endOfTask(task);
 
   if (start.isSame(end, "day")) {
-    return `${start.format("M月D日 HH:mm")} - ${end.format("HH:mm")}`;
+    return `${start.format("M月D日（ddd） HH:mm")} - ${end.format("HH:mm")}`;
   }
 
-  return `${start.format("M月D日 HH:mm")} - ${end.format("M月D日 HH:mm")}`;
+  return `${start.format("M月D日（ddd） HH:mm")} - ${end.format("M月D日（ddd） HH:mm")}`;
 }
 
 export function CalendarWorkspace({
@@ -319,7 +317,8 @@ export function CalendarWorkspace({
 
     if (profileError || !profile) {
       setWorkspaceError(
-        profileError?.message || "当前账号还没有 profile，请确认已执行 schema.sql。",
+        profileError?.message ||
+          "現在のアカウントに profile がありません。schema.sql が実行済みか確認してください。",
       );
       setCurrentUser(null);
       setAuthLoading(false);
@@ -337,7 +336,7 @@ export function CalendarWorkspace({
     };
 
     if (!usersResponse.ok) {
-      setWorkspaceError(usersPayload.error || "账号列表加载失败");
+      setWorkspaceError(usersPayload.error || "アカウント一覧の読み込みに失敗しました");
       setUsers([currentProfile]);
     } else {
       const workspaceUsers = (usersPayload.users || []).map(profileToUser);
@@ -476,7 +475,7 @@ export function CalendarWorkspace({
     const assigneeIds = Array.from(new Set(values.assigneeIds));
 
     if (assigneeIds.length === 0) {
-      message.error("请选择负责人");
+      message.error("担当者を選択してください");
       return;
     }
 
@@ -484,7 +483,7 @@ export function CalendarWorkspace({
       .from("tasks")
       .insert({
         title: values.title,
-        description: values.description || "暂无补充说明。",
+        description: values.description || "補足説明はありません。",
         starts_at: start.toISOString(),
         ends_at: end.toISOString(),
         status: values.status,
@@ -495,7 +494,7 @@ export function CalendarWorkspace({
       .single<{ id: string }>();
 
     if (error || !data) {
-      message.error(error?.message || "创建任务失败");
+      message.error(error?.message || "タスクの作成に失敗しました");
       return;
     }
 
@@ -519,7 +518,7 @@ export function CalendarWorkspace({
     setTaskModalOpen(false);
     taskForm.resetFields();
     await loadWorkspaceData();
-    message.success("任务已创建");
+    message.success("タスクを作成しました");
   };
 
   const createMember = async (values: MemberFormValues) => {
@@ -535,11 +534,11 @@ export function CalendarWorkspace({
     const payload = (await response.json()) as { error?: string };
 
     if (!response.ok) {
-      message.error(payload.error || "创建账号失败");
+      message.error(payload.error || "アカウントの作成に失敗しました");
       return;
     }
 
-    message.success("账号已创建");
+    message.success("アカウントを作成しました");
     setMemberModalOpen(false);
     memberForm.resetFields();
     await loadWorkspaceData();
@@ -556,11 +555,11 @@ export function CalendarWorkspace({
     setDeletingUserId(null);
 
     if (!response.ok) {
-      message.error(payload.error || "删除账号失败");
+      message.error(payload.error || "アカウントの削除に失敗しました");
       return;
     }
 
-    message.success("账号已删除");
+    message.success("アカウントを削除しました");
     await loadWorkspaceData();
   };
 
@@ -582,7 +581,7 @@ export function CalendarWorkspace({
 
     setActiveTaskId(null);
     await loadWorkspaceData();
-    message.success("任务已删除");
+    message.success("タスクを削除しました");
   };
 
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
@@ -596,7 +595,7 @@ export function CalendarWorkspace({
     }
 
     await loadWorkspaceData();
-    message.success("状态已更新");
+    message.success("ステータスを更新しました");
   };
 
   const openTaskDetail = (task: CalendarTask) => {
@@ -605,11 +604,11 @@ export function CalendarWorkspace({
 
   if (!hasConfig || !supabase) {
     return (
-      <WorkspaceShell eyebrow="Supabase 配置" title="日历">
+      <WorkspaceShell eyebrow="Supabase 設定" title="カレンダー">
         <div className="setup-panel">
           <Alert
-            message="缺少 Supabase 环境变量"
-            description="请先在 .env.local 填入 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY 和 SUPABASE_JWKS_URL，然后重启 pnpm dev。"
+            message="Supabase 環境変数が不足しています"
+            description=".env.local に SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY、SUPABASE_JWKS_URL を設定してから pnpm dev を再起動してください。"
             type="warning"
             showIcon
           />
@@ -620,7 +619,7 @@ export function CalendarWorkspace({
 
   if (authLoading) {
     return (
-      <WorkspaceShell eyebrow="正在连接 Supabase" title="日历">
+      <WorkspaceShell eyebrow="Supabase に接続中" title="カレンダー">
         <div className="loading-panel">
           <Spin />
         </div>
@@ -630,7 +629,7 @@ export function CalendarWorkspace({
 
   if (!currentUser) {
     return (
-      <WorkspaceShell eyebrow="正在跳转登录页" title="日历">
+      <WorkspaceShell eyebrow="ログインページへ移動中" title="カレンダー">
         <div className="loading-panel">
           <Spin />
         </div>
@@ -643,11 +642,11 @@ export function CalendarWorkspace({
       actions={
         <Space size={12} wrap>
           <Button loading={dataLoading} onClick={loadWorkspaceData}>
-            刷新
+            更新
           </Button>
           {canManageAccounts ? (
             <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
-              账号管理
+              アカウント管理
             </Button>
           ) : null}
           <Button
@@ -655,13 +654,13 @@ export function CalendarWorkspace({
             onClick={() => openTaskModal()}
             type="primary"
           >
-            新增任务
+            タスク作成
           </Button>
-          <Button onClick={signOut}>退出</Button>
+          <Button onClick={signOut}>ログアウト</Button>
           <Avatar className="profile-avatar">{initials(currentUser.name)}</Avatar>
         </Space>
       }
-      title="日历"
+      title="カレンダー"
     >
       <div className="content-grid calendar-content-grid">
         <section className="calendar-panel">
@@ -686,15 +685,15 @@ export function CalendarWorkspace({
                   setSelectedDate(today);
                 }}
               >
-                今天
+                今日
               </Button>
             </Flex>
             <Segmented
               onChange={(value) => setCalendarScope(value as CalendarScope)}
               options={[
-                { label: "全部", value: "all" },
-                { label: "我发出的", value: "sent" },
-                { label: "发给我的", value: "received" },
+                { label: "すべて", value: "all" },
+                { label: "自分が依頼", value: "sent" },
+                { label: "自分宛て", value: "received" },
               ]}
               value={calendarScope}
             />
@@ -715,23 +714,23 @@ export function CalendarWorkspace({
         <aside className="detail-panel">
           <div className="detail-header">
             <div>
-              <Text type="secondary">{selectedDate.format("M月D日 dddd")}</Text>
-              <Title level={4}>当天任务</Title>
+              <Text type="secondary">{selectedDate.format("M月D日（dddd）")}</Text>
+              <Title level={4}>当日のタスク</Title>
             </div>
             <Button icon={<MoreOutlined />} onClick={() => openTaskModal(selectedDate)} />
           </div>
           <Progress percent={completion} size="small" strokeColor="#17a765" />
           <div className="summary-row">
-            <span>本月任务 {monthTasks.length}</span>
-            <span>已完成 {doneCount}</span>
+            <span>今月のタスク {monthTasks.length}</span>
+            <span>完了 {doneCount}</span>
           </div>
           <div className="relation-summary-row">
-            <span>我发出 {sentMonthCount}</span>
-            <span>发给我 {receivedMonthCount}</span>
+            <span>依頼 {sentMonthCount}</span>
+            <span>受信 {receivedMonthCount}</span>
           </div>
           <div className="task-detail-list">
             {selectedTasks.length === 0 ? (
-              <Empty description="当天暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="当日のタスクはありません" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               selectedTasks.map((task) => (
                 <TaskDetailCard
@@ -749,24 +748,24 @@ export function CalendarWorkspace({
 
       <Modal
         destroyOnHidden
-        okText="创建任务"
+        okText="作成"
         onCancel={() => setTaskModalOpen(false)}
         onOk={() => taskForm.submit()}
         open={taskModalOpen}
-        title="新增任务"
+        title="タスク作成"
       >
         <Form form={taskForm} layout="vertical" onFinish={createTask}>
           <Form.Item
-            label="任务标题"
+            label="タスク名"
             name="title"
-            rules={[{ message: "请输入任务标题", required: true }]}
+            rules={[{ message: "タスク名を入力してください", required: true }]}
           >
-            <Input placeholder="例如：办公室电脑安装" />
+            <Input placeholder="例：会議室 PC セットアップ" />
           </Form.Item>
           <Form.Item
-            label="时间范围"
+            label="期間"
             name="range"
-            rules={[{ message: "请选择开始和结束时间", required: true }]}
+            rules={[{ message: "開始日時と終了日時を選択してください", required: true }]}
           >
             <RangePicker
               format="YYYY/MM/DD HH:mm"
@@ -775,9 +774,9 @@ export function CalendarWorkspace({
             />
           </Form.Item>
           <Form.Item
-            label="负责人"
+            label="担当者"
             name="assigneeIds"
-            rules={[{ message: "请选择负责人", required: true }]}
+            rules={[{ message: "担当者を選択してください", required: true }]}
           >
             <Select
               maxTagCount="responsive"
@@ -788,27 +787,27 @@ export function CalendarWorkspace({
             />
           </Form.Item>
           <Flex gap={12}>
-            <Form.Item label="状态" name="status" style={{ flex: 1 }}>
+            <Form.Item label="ステータス" name="status" style={{ flex: 1 }}>
               <Select
                 options={[
-                  { label: "待处理", value: "todo" },
-                  { label: "进行中", value: "doing" },
-                  { label: "已完成", value: "done" },
+                  { label: "未着手", value: "todo" },
+                  { label: "進行中", value: "doing" },
+                  { label: "完了", value: "done" },
                 ]}
               />
             </Form.Item>
-            <Form.Item label="优先级" name="priority" style={{ flex: 1 }}>
+            <Form.Item label="優先度" name="priority" style={{ flex: 1 }}>
               <Select
                 options={[
                   { label: "低", value: "low" },
-                  { label: "普通", value: "normal" },
+                  { label: "通常", value: "normal" },
                   { label: "高", value: "high" },
                 ]}
               />
             </Form.Item>
           </Flex>
-          <Form.Item label="说明" name="description">
-            <Input.TextArea placeholder="补充任务背景、交付要求或注意事项" rows={4} />
+          <Form.Item label="説明" name="description">
+            <Input.TextArea placeholder="背景、依頼内容、注意事項など" rows={4} />
           </Form.Item>
         </Form>
       </Modal>
@@ -825,11 +824,11 @@ export function CalendarWorkspace({
 
       <Modal
         destroyOnHidden
-        okText="创建账号"
+        okText="作成"
         onCancel={() => setMemberModalOpen(false)}
         onOk={() => memberForm.submit()}
         open={memberModalOpen}
-        title="账号管理"
+        title="アカウント管理"
       >
         <div className="account-management-list">
           {users.map((user) => (
@@ -839,23 +838,23 @@ export function CalendarWorkspace({
                 <div className="account-name">{user.name}</div>
               </div>
               <Tag color={user.role === "admin" ? "blue" : "default"}>
-                {user.role === "admin" ? "管理员" : "员工"}
+                {user.role === "admin" ? "管理者" : "メンバー"}
               </Tag>
               <Popconfirm
-                cancelText="取消"
-                description={`确定删除 ${user.name} 的账号吗？`}
+                cancelText="キャンセル"
+                description={`${user.name} のアカウントを削除しますか？`}
                 disabled={user.id === currentUserId}
                 okButtonProps={{ danger: true }}
-                okText="删除"
+                okText="削除"
                 onConfirm={() => deleteMember(user.id)}
-                title="删除账号"
+                title="アカウント削除"
               >
                 <Button
                   danger
                   disabled={user.id === currentUserId}
                   icon={<DeleteOutlined />}
                   loading={deletingUserId === user.id}
-                  title={user.id === currentUserId ? "不能删除当前账号" : "删除账号"}
+                  title={user.id === currentUserId ? "現在のアカウントは削除できません" : "削除"}
                 />
               </Popconfirm>
             </div>
@@ -868,10 +867,10 @@ export function CalendarWorkspace({
           onFinish={createMember}
         >
           <Form.Item
-            label="账号"
+            label="アカウント"
             name="account"
             rules={[
-              { message: "请输入账号", required: true },
+              { message: "アカウントを入力してください", required: true },
               {
                 validator: async (_, value) => {
                   const error = getAccountValidationError(String(value || ""));
@@ -883,20 +882,20 @@ export function CalendarWorkspace({
               },
             ]}
           >
-            <Input placeholder="例如 张三" />
+            <Input placeholder="例：田中" />
           </Form.Item>
           <Form.Item
-            label="初始密码"
+            label="初期パスワード"
             name="password"
-            rules={[{ message: "请输入初始密码", required: true }]}
+            rules={[{ message: "初期パスワードを入力してください", required: true }]}
           >
-            <Input.Password placeholder="至少 6 位" />
+            <Input.Password placeholder="6文字以上" />
           </Form.Item>
-          <Form.Item label="角色" name="role">
+          <Form.Item label="権限" name="role">
             <Select
               options={[
-                { label: "普通员工", value: "member" },
-                { label: "管理员", value: "admin" },
+                { label: "メンバー", value: "member" },
+                { label: "管理者", value: "admin" },
               ]}
             />
           </Form.Item>
@@ -952,6 +951,7 @@ function MonthRangeCalendar({
                 const isCurrentMonth = date.month() === calendarValue.month();
                 const isSelected = date.isSame(selectedDate, "day");
                 const isToday = date.isSame(dayjs(), "day");
+                const restDay = getJapanRestDay(date.format("YYYY-MM-DD"), date.day());
 
                 return (
                   <button
@@ -959,14 +959,27 @@ function MonthRangeCalendar({
                       "range-day",
                       isCurrentMonth ? "" : "is-muted",
                       isSelected ? "is-selected" : "",
+                      restDay.isRestDay ? "is-rest" : "",
+                      restDay.isSaturday ? "is-saturday" : "",
+                      restDay.isSunday ? "is-sunday" : "",
+                      restDay.isHoliday ? "is-holiday" : "",
                     ].join(" ")}
                     key={date.format("YYYY-MM-DD")}
                     onDoubleClick={() => onCreateTask(date)}
                     onClick={() => onSelectDate(date)}
+                    title={restDay.label || undefined}
                     type="button"
                   >
-                    <span className={isToday ? "today-number" : ""}>
-                      {date.date()}
+                    <span className="range-day-date">
+                      <span className={isToday ? "today-number" : ""}>
+                        {date.date()}
+                      </span>
+                      {restDay.isRestDay ? (
+                        <span
+                          aria-label={restDay.label || "休日"}
+                          className="range-day-rest-dot"
+                        />
+                      ) : null}
                     </span>
                   </button>
                 );
@@ -1004,7 +1017,7 @@ function MonthRangeCalendar({
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
                       gridRow: index + 1,
                     } as CSSProperties}
-                    title={`${task.title} · ${relationLabel} · 优先级${priority.label}`}
+                    title={`${task.title} · ${relationLabel} · 優先度${priority.label}`}
                     type="button"
                   >
                     <span
@@ -1023,7 +1036,7 @@ function MonthRangeCalendar({
             </div>
             {weekTasks.length > visibleWeekEventCount ? (
               <Text className="range-more-count" type="secondary">
-                +{weekTasks.length - visibleWeekEventCount} 项
+                +{weekTasks.length - visibleWeekEventCount}件
               </Text>
             ) : null}
           </div>
@@ -1079,8 +1092,8 @@ function TaskDetailCard({
         strokeColor={relationStyle.color}
       />
       <div className="task-meta">
-        <Tag color={priority.color}>优先级 {priority.label}</Tag>
-        <Tag>发起人 {creator?.name || "未知"}</Tag>
+        <Tag color={priority.color}>優先度 {priority.label}</Tag>
+        <Tag>依頼者 {creator?.name || "不明"}</Tag>
         <Avatar.Group max={{ count: 3 }}>
           {assignees.map((user) => (
             <Tooltip key={user.id} title={user.name}>
@@ -1131,24 +1144,24 @@ function TaskActionModal({
         <Space wrap>
           {canDelete ? (
             <Popconfirm
-              cancelText="取消"
-              description="删除后无法恢复，确定删除这个任务吗？"
+              cancelText="キャンセル"
+              description="削除後は復元できません。このタスクを削除しますか？"
               okButtonProps={{ danger: true }}
-              okText="删除"
+              okText="削除"
               onConfirm={() => onDelete(task)}
-              title="删除任务"
+              title="タスク削除"
             >
               <Button danger icon={<DeleteOutlined />} loading={deleting}>
-                删除任务
+                タスク削除
               </Button>
             </Popconfirm>
           ) : null}
-          <Button onClick={() => onStatusChange(task.id, "todo")}>待处理</Button>
+          <Button onClick={() => onStatusChange(task.id, "todo")}>未着手</Button>
           <Button onClick={() => onStatusChange(task.id, "doing")} type="primary">
-            开始处理
+            進行中にする
           </Button>
           <Button onClick={() => onStatusChange(task.id, "done")} type="primary">
-            标记完成
+            完了にする
           </Button>
         </Space>
       }
@@ -1160,18 +1173,18 @@ function TaskActionModal({
         <div className="task-action-status">
           <Tag color={relationStyle.color}>{relationLabel}</Tag>
           <Tag color={status.color}>{status.label}</Tag>
-          <Tag color={priority.color}>优先级 {priority.label}</Tag>
+          <Tag color={priority.color}>優先度 {priority.label}</Tag>
         </div>
         <div className="task-action-row">
-          <Text type="secondary">时间范围</Text>
+          <Text type="secondary">期間</Text>
           <Text>{formatTaskRange(task)}</Text>
         </div>
         <div className="task-action-row">
-          <Text type="secondary">发起人</Text>
-          <Text>{creator?.name || "未知"}</Text>
+          <Text type="secondary">依頼者</Text>
+          <Text>{creator?.name || "不明"}</Text>
         </div>
         <div className="task-action-row">
-          <Text type="secondary">负责人</Text>
+          <Text type="secondary">担当者</Text>
           <Avatar.Group max={{ count: 5 }}>
             {assignees.map((user) => (
               <Tooltip key={user.id} title={user.name}>
@@ -1183,8 +1196,8 @@ function TaskActionModal({
           </Avatar.Group>
         </div>
         <div className="task-action-description">
-          <Text type="secondary">任务说明</Text>
-          <p>{task.description || "暂无补充说明。"}</p>
+          <Text type="secondary">説明</Text>
+          <p>{task.description || "補足説明はありません。"}</p>
         </div>
       </div>
     </Modal>

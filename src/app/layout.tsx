@@ -4,8 +4,8 @@ import { AppProviders } from "@/components/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AG GROUP 工作日历",
-  description: "员工任务指派与工作日历管理后台",
+  title: "AG GROUP 勤務カレンダー",
+  description: "従業員タスクの依頼と勤務カレンダー管理",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="h-full antialiased">
+    <html lang="ja" className="h-full antialiased">
       <body className="min-h-full">
         <AntdRegistry>
           <AppProviders>{children}</AppProviders>

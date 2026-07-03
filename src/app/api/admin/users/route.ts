@@ -42,7 +42,7 @@ async function requireAdminRequester() {
   const requesterId = claims.data?.claims.sub;
 
   if (claims.error || !requesterId) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ error: "認証が必要です。" }, { status: 401 });
   }
 
   const { data: requesterProfile, error: profileError } = await supabase
@@ -52,7 +52,7 @@ async function requireAdminRequester() {
     .single();
 
   if (profileError || requesterProfile?.role !== "admin") {
-    return NextResponse.json({ error: "Admin role required." }, { status: 403 });
+    return NextResponse.json({ error: "管理者権限が必要です。" }, { status: 403 });
   }
 
   return requesterId;
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   if (!admin) {
     return NextResponse.json(
-      { error: "Missing Supabase admin environment variables." },
+      { error: "Supabase 管理用の環境変数が不足しています。" },
       { status: 500 },
     );
   }
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
   if (!account || !password) {
     return NextResponse.json(
-      { error: "account and password are required." },
+      { error: "アカウントとパスワードは必須です。" },
       { status: 400 },
     );
   }
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
 
   if (error || !data.user) {
     return NextResponse.json(
-      { error: error?.message || "Failed to create user." },
+      { error: error?.message || "アカウントの作成に失敗しました。" },
       { status: 400 },
     );
   }
@@ -139,7 +139,7 @@ export async function DELETE(request: Request) {
 
   if (!admin) {
     return NextResponse.json(
-      { error: "Missing Supabase admin environment variables." },
+      { error: "Supabase 管理用の環境変数が不足しています。" },
       { status: 500 },
     );
   }
@@ -154,12 +154,12 @@ export async function DELETE(request: Request) {
   const userId = body.userId?.trim();
 
   if (!userId) {
-    return NextResponse.json({ error: "userId is required." }, { status: 400 });
+    return NextResponse.json({ error: "userId は必須です。" }, { status: 400 });
   }
 
   if (userId === requesterId) {
     return NextResponse.json(
-      { error: "Cannot delete your own account." },
+      { error: "自分のアカウントは削除できません。" },
       { status: 400 },
     );
   }

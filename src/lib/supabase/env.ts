@@ -11,7 +11,7 @@ export function requireSupabaseBrowserConfig() {
   const config = getSupabaseBrowserConfig();
 
   if (!config.supabaseUrl || !config.supabasePublishableKey) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY.");
+    throw new Error("SUPABASE_URL または SUPABASE_PUBLISHABLE_KEY が不足しています。");
   }
 
   return {
