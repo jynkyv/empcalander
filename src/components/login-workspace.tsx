@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 const { Title } = Typography;
 
 type LoginFormValues = {
-  email: string;
+  account: string;
   password: string;
 };
 
@@ -54,7 +54,7 @@ export function LoginWorkspace({
 
     setSubmitting(true);
     const { error } = await supabase.auth.signInWithPassword({
-      email: normalizeLoginEmail(values.email),
+      email: normalizeLoginEmail(values.account),
       password: values.password,
     });
     setSubmitting(false);
@@ -100,10 +100,10 @@ export function LoginWorkspace({
           <Form layout="vertical" onFinish={signIn}>
             <Form.Item
               label="账号"
-              name="email"
-              rules={[{ message: "请输入账号或邮箱", required: true }]}
+              name="account"
+              rules={[{ message: "请输入账号", required: true }]}
             >
-              <Input placeholder="账号或邮箱" />
+              <Input placeholder="请输入账号" />
             </Form.Item>
             <Form.Item
               label="密码"

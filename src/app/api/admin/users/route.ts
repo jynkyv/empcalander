@@ -1,38 +1,42 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { accountToAuthEmail } from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdminConfig } from "@/lib/supabase/env";
 
 type CreateUserBody = {
-  email?: string;
+  account?: string;
   fullName?: string;
   password?: string;
   role?: "admin" | "member";
 };
 
-export async function POST(request: Request) {
+type DeleteUserBody = {
+  userId?: string;
+};
+
+const accountPattern = /^[a-z0-9][a-z0-9._-]{1,31}$/;
+
+function createAdminClient() {
   const adminConfig = getSupabaseAdminConfig();
 
   if (!adminConfig) {
-    return NextResponse.json(
-      { error: "Missing Supabase admin environment variables." },
-      { status: 500 },
-    );
+    return null;
   }
 
-  const body = (await request.json()) as CreateUserBody;
-  const email = body.email?.trim().toLowerCase();
-  const fullName = body.fullName?.trim();
-  const password = body.password;
-  const role = body.role || "member";
+  return createSupabaseAdminClient(
+    adminConfig.supabaseUrl,
+    adminConfig.supabaseSecretKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    },
+  );
+}
 
-  if (!email || !fullName || !password) {
-    return NextResponse.json(
-      { error: "email, fullName and password are required." },
-      { status: 400 },
-    );
-  }
-
+async function requireAdminRequester() {
   const supabase = await createClient();
   const claims = await supabase.auth.getClaims();
   const requesterId = claims.data?.claims.sub;
@@ -51,13 +55,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Admin role required." }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient(adminConfig.supabaseUrl, adminConfig.supabaseSecretKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return requesterId;
+}
 
+export async function POST(request: Request) {
+  const admin = createAdminClient();
+
+  if (!admin) {
+    return NextResponse.json(
+      { error: "Missing Supabase admin environment variables." },
+      { status: 500 },
+    );
+  }
+
+  const body = (await request.json()) as CreateUserBody;
+  const account = body.account?.trim().toLowerCase();
+  const fullName = body.fullName?.trim();
+  const password = body.password;
+  const role = body.role || "member";
+
+  if (!account || !fullName || !password) {
+    return NextResponse.json(
+      { error: "account, fullName and password are required." },
+      { status: 400 },
+    );
+  }
+
+  if (!accountPattern.test(account)) {
+    return NextResponse.json(
+      {
+        error:
+          "Account can only use lowercase letters, numbers, dots, dashes and underscores.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const requesterId = await requireAdminRequester();
+
+  if (typeof requesterId !== "string") {
+    return requesterId;
+  }
+
+  const email = accountToAuthEmail(account);
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
@@ -89,10 +129,49 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     user: {
-      id: data.user.id,
-      email,
+      account,
       fullName,
+      id: data.user.id,
       role,
     },
   });
+}
+
+export async function DELETE(request: Request) {
+  const admin = createAdminClient();
+
+  if (!admin) {
+    return NextResponse.json(
+      { error: "Missing Supabase admin environment variables." },
+      { status: 500 },
+    );
+  }
+
+  const requesterId = await requireAdminRequester();
+
+  if (typeof requesterId !== "string") {
+    return requesterId;
+  }
+
+  const body = (await request.json()) as DeleteUserBody;
+  const userId = body.userId?.trim();
+
+  if (!userId) {
+    return NextResponse.json({ error: "userId is required." }, { status: 400 });
+  }
+
+  if (userId === requesterId) {
+    return NextResponse.json(
+      { error: "Cannot delete your own account." },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

@@ -18,7 +18,7 @@ Next.js + Supabase 的员工任务日历后台。当前版本使用 Supabase Aut
 - 右侧日期任务详情面板
 - 任务详情弹窗与状态操作
 - Supabase SSR 客户端与 Next 16 `proxy.ts`
-- 管理员创建用户 API：`POST /api/admin/users`
+- 管理员账号创建/删除 API：`/api/admin/users`
 - 初始数据库 schema：`supabase/schema.sql`
 
 ## 本地运行

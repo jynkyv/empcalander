@@ -14,6 +14,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Progress,
   Segmented,
   Select,
@@ -26,6 +27,7 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
+  DeleteOutlined,
   LeftOutlined,
   MoreOutlined,
   PlusOutlined,
@@ -34,6 +36,7 @@ import {
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import {
+  emailToAccount,
   hasSupabaseConfig,
   type SupabaseBrowserConfig,
 } from "@/lib/auth-config";
@@ -104,8 +107,8 @@ type TaskFormValues = {
 };
 
 type MemberFormValues = {
+  account: string;
   name: string;
-  email: string;
   password: string;
   role: "admin" | "member";
 };
@@ -279,6 +282,7 @@ export function CalendarWorkspace({
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
 
@@ -504,7 +508,7 @@ export function CalendarWorkspace({
   const createMember = async (values: MemberFormValues) => {
     const response = await fetch("/api/admin/users", {
       body: JSON.stringify({
-        email: values.email,
+        account: values.account,
         fullName: values.name,
         password: values.password,
         role: values.role,
@@ -522,6 +526,25 @@ export function CalendarWorkspace({
     message.success("账号已创建");
     setMemberModalOpen(false);
     memberForm.resetFields();
+    await loadWorkspaceData();
+  };
+
+  const deleteMember = async (userId: string) => {
+    setDeletingUserId(userId);
+    const response = await fetch("/api/admin/users", {
+      body: JSON.stringify({ userId }),
+      headers: { "Content-Type": "application/json" },
+      method: "DELETE",
+    });
+    const payload = (await response.json()) as { error?: string };
+    setDeletingUserId(null);
+
+    if (!response.ok) {
+      message.error(payload.error || "删除账号失败");
+      return;
+    }
+
+    message.success("账号已删除");
     await loadWorkspaceData();
   };
 
@@ -775,11 +798,28 @@ export function CalendarWorkspace({
               <Avatar style={{ backgroundColor: user.color }}>{initials(user.name)}</Avatar>
               <div>
                 <div className="account-name">{user.name}</div>
-                <Text type="secondary">{user.email}</Text>
+                <Text type="secondary">{emailToAccount(user.email)}</Text>
               </div>
               <Tag color={user.role === "admin" ? "blue" : "default"}>
                 {user.role === "admin" ? "管理员" : "员工"}
               </Tag>
+              <Popconfirm
+                cancelText="取消"
+                description={`确定删除 ${user.name} 的账号吗？`}
+                disabled={user.id === currentUserId}
+                okButtonProps={{ danger: true }}
+                okText="删除"
+                onConfirm={() => deleteMember(user.id)}
+                title="删除账号"
+              >
+                <Button
+                  danger
+                  disabled={user.id === currentUserId}
+                  icon={<DeleteOutlined />}
+                  loading={deletingUserId === user.id}
+                  title={user.id === currentUserId ? "不能删除当前账号" : "删除账号"}
+                />
+              </Popconfirm>
             </div>
           ))}
         </div>
@@ -790,21 +830,24 @@ export function CalendarWorkspace({
           onFinish={createMember}
         >
           <Form.Item
+            label="账号"
+            name="account"
+            rules={[
+              { message: "请输入账号", required: true },
+              {
+                message: "账号只能使用小写字母、数字、点、横线和下划线",
+                pattern: /^[a-z0-9][a-z0-9._-]{1,31}$/,
+              },
+            ]}
+          >
+            <Input placeholder="例如 zhangsan" />
+          </Form.Item>
+          <Form.Item
             label="姓名"
             name="name"
             rules={[{ message: "请输入姓名", required: true }]}
           >
             <Input placeholder="员工姓名" />
-          </Form.Item>
-          <Form.Item
-            label="邮箱"
-            name="email"
-            rules={[
-              { message: "请输入邮箱", required: true },
-              { message: "邮箱格式不正确", type: "email" },
-            ]}
-          >
-            <Input placeholder="name@company.com" />
           </Form.Item>
           <Form.Item
             label="初始密码"
