@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { accountToAuthEmail } from "@/lib/auth-config";
+import {
+  accountToAuthEmail,
+  getAccountValidationError,
+} from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdminConfig } from "@/lib/supabase/env";
 
@@ -14,8 +17,6 @@ type CreateUserBody = {
 type DeleteUserBody = {
   userId?: string;
 };
-
-const accountPattern = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 
 function createAdminClient() {
   const adminConfig = getSupabaseAdminConfig();
@@ -81,12 +82,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!accountPattern.test(account)) {
+  const accountValidationError = getAccountValidationError(account);
+
+  if (accountValidationError) {
     return NextResponse.json(
-      {
-        error:
-          "Account can only use lowercase letters, numbers, dots, dashes and underscores.",
-      },
+      { error: accountValidationError },
       { status: 400 },
     );
   }

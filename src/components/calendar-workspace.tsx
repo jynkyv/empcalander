@@ -37,6 +37,7 @@ import {
 import { WorkspaceShell } from "@/components/workspace-shell";
 import {
   emailToAccount,
+  getAccountValidationError,
   hasSupabaseConfig,
   type SupabaseBrowserConfig,
 } from "@/lib/auth-config";
@@ -835,12 +836,17 @@ export function CalendarWorkspace({
             rules={[
               { message: "请输入账号", required: true },
               {
-                message: "账号只能使用小写字母、数字、点、横线和下划线",
-                pattern: /^[a-z0-9][a-z0-9._-]{1,31}$/,
+                validator: async (_, value) => {
+                  const error = getAccountValidationError(String(value || ""));
+
+                  if (error) {
+                    throw new Error(error);
+                  }
+                },
               },
             ]}
           >
-            <Input placeholder="例如 zhangsan" />
+            <Input placeholder="例如 张三" />
           </Form.Item>
           <Form.Item
             label="姓名"
