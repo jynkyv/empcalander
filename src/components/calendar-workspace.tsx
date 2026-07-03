@@ -330,17 +330,18 @@ export function CalendarWorkspace({
     const currentProfile = profileToUser(profile);
     setCurrentUser(currentProfile);
 
-    const { data: profileRows, error: profilesError } = await supabase
-      .from("profiles")
-      .select("id,email,full_name,role,color")
-      .order("created_at", { ascending: true })
-      .returns<ProfileRow[]>();
+    const usersResponse = await fetch("/api/users", { cache: "no-store" });
+    const usersPayload = (await usersResponse.json()) as {
+      error?: string;
+      users?: ProfileRow[];
+    };
 
-    if (profilesError) {
-      setWorkspaceError(profilesError.message);
+    if (!usersResponse.ok) {
+      setWorkspaceError(usersPayload.error || "账号列表加载失败");
       setUsers([currentProfile]);
     } else {
-      setUsers((profileRows || []).map(profileToUser));
+      const workspaceUsers = (usersPayload.users || []).map(profileToUser);
+      setUsers(workspaceUsers.length > 0 ? workspaceUsers : [currentProfile]);
     }
 
     const { data: taskRows, error: tasksError } = await supabase
