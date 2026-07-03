@@ -33,7 +33,10 @@ import {
   UserAddOutlined,
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
-import { hasSupabaseConfig } from "@/lib/auth-config";
+import {
+  hasSupabaseConfig,
+  type SupabaseBrowserConfig,
+} from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CalendarTask,
@@ -253,10 +256,17 @@ function formatTaskRange(task: CalendarTask) {
   return `${start.format("M月D日 HH:mm")} - ${end.format("M月D日 HH:mm")}`;
 }
 
-export function CalendarWorkspace() {
+export function CalendarWorkspace({
+  supabaseConfig,
+}: {
+  supabaseConfig: SupabaseBrowserConfig;
+}) {
   const router = useRouter();
   const { message } = App.useApp();
-  const [supabase] = useState(() => (hasSupabaseConfig ? createClient() : null));
+  const hasConfig = hasSupabaseConfig(supabaseConfig);
+  const [supabase] = useState(() =>
+    hasConfig ? createClient(supabaseConfig) : null,
+  );
   const [currentUser, setCurrentUser] = useState<CalendarUser | null>(null);
   const [users, setUsers] = useState<CalendarUser[]>([]);
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
@@ -365,9 +375,9 @@ export function CalendarWorkspace() {
   }, [loadWorkspaceData, supabase]);
 
   useEffect(() => {
-    if (!hasSupabaseConfig || authLoading || currentUser) return;
+    if (!hasConfig || authLoading || currentUser) return;
     router.replace("/login");
-  }, [authLoading, currentUser, router]);
+  }, [authLoading, currentUser, hasConfig, router]);
 
   const activeTask = useMemo(
     () => tasks.find((task) => task.id === activeTaskId) || null,
@@ -533,13 +543,13 @@ export function CalendarWorkspace() {
     setActiveTaskId(task.id);
   };
 
-  if (!hasSupabaseConfig || !supabase) {
+  if (!hasConfig || !supabase) {
     return (
       <WorkspaceShell eyebrow="Supabase 配置" title="日历">
         <div className="setup-panel">
           <Alert
             message="缺少 Supabase 环境变量"
-            description="请先在 .env.local 填入 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 和 SUPABASE_SECRET_KEY，然后重启 pnpm dev。"
+            description="请先在 .env.local 填入 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY 和 SUPABASE_JWKS_URL，然后重启 pnpm dev。"
             type="warning"
             showIcon
           />

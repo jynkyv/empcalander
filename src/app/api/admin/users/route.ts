@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminConfig } from "@/lib/supabase/env";
 
 type CreateUserBody = {
   email?: string;
@@ -10,11 +11,9 @@ type CreateUserBody = {
 };
 
 export async function POST(request: Request) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const adminKey =
-    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const adminConfig = getSupabaseAdminConfig();
 
-  if (!supabaseUrl || !adminKey) {
+  if (!adminConfig) {
     return NextResponse.json(
       { error: "Missing Supabase admin environment variables." },
       { status: 500 },
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Admin role required." }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient(supabaseUrl, adminKey, {
+  const admin = createSupabaseAdminClient(adminConfig.supabaseUrl, adminConfig.supabaseSecretKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

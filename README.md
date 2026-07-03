@@ -43,9 +43,10 @@ cp .env.example .env.local
 填入：
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
+SUPABASE_JWKS_URL=
 BOOTSTRAP_ADMIN_EMAIL=admin@ag.local
 BOOTSTRAP_ADMIN_PASSWORD=admin123
 ```
@@ -56,7 +57,7 @@ BOOTSTRAP_ADMIN_PASSWORD=admin123
 supabase/schema.sql
 ```
 
-`SUPABASE_SECRET_KEY` 只用于服务端管理员开户接口，不要暴露到浏览器。
+`SUPABASE_SECRET_KEY` 只用于服务端管理员开户接口，不要暴露到浏览器。`SUPABASE_PUBLISHABLE_KEY` 会传给浏览器端 Supabase client。`SUPABASE_JWKS_URL` 保留给服务端 JWT 校验配置。
 
 第一次使用时，打开页面点击“初始化管理员”，系统会在没有任何管理员时创建默认账号：
 

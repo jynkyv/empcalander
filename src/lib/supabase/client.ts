@@ -1,14 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseBrowserConfig } from "@/lib/auth-config";
 
-export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export function createClient(config: SupabaseBrowserConfig) {
+  const { supabasePublishableKey, supabaseUrl } = config;
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase public environment variables.");
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error("Missing Supabase browser configuration.");
   }
 
-  return createBrowserClient(supabaseUrl, supabaseKey);
+  return createBrowserClient(supabaseUrl, supabasePublishableKey);
 }

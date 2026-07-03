@@ -8,6 +8,7 @@ import {
   bootstrapAdminPassword,
   hasSupabaseConfig,
   normalizeLoginEmail,
+  type SupabaseBrowserConfig,
 } from "@/lib/auth-config";
 import { createClient } from "@/lib/supabase/client";
 
@@ -18,12 +19,19 @@ type LoginFormValues = {
   password: string;
 };
 
-export function LoginWorkspace() {
+export function LoginWorkspace({
+  supabaseConfig,
+}: {
+  supabaseConfig: SupabaseBrowserConfig;
+}) {
   const router = useRouter();
   const { message } = App.useApp();
   const [form] = Form.useForm<LoginFormValues>();
-  const [supabase] = useState(() => (hasSupabaseConfig ? createClient() : null));
-  const [checkingSession, setCheckingSession] = useState(hasSupabaseConfig);
+  const hasConfig = hasSupabaseConfig(supabaseConfig);
+  const [supabase] = useState(() =>
+    hasConfig ? createClient(supabaseConfig) : null,
+  );
+  const [checkingSession, setCheckingSession] = useState(hasConfig);
   const [submitting, setSubmitting] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
 
@@ -83,12 +91,12 @@ export function LoginWorkspace() {
     message.success("管理员已初始化，可以登录");
   };
 
-  if (!hasSupabaseConfig || !supabase) {
+  if (!hasConfig || !supabase) {
     return (
       <WorkspaceShell eyebrow="Supabase 配置" title="登录">
         <div className="setup-panel">
           <Alert
-            description="请先在 .env.local 填入 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 和 SUPABASE_SECRET_KEY，然后重启 pnpm dev。"
+            description="请先在 .env.local 填入 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、SUPABASE_SECRET_KEY 和 SUPABASE_JWKS_URL，然后重启 pnpm dev。"
             message="缺少 Supabase 环境变量"
             showIcon
             type="warning"
