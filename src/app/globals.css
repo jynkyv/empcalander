@@ -290,9 +290,9 @@ select {
   --calendar-event-gap: 4px;
   --calendar-event-height: 22px;
   --calendar-event-margin-x: 8px;
-  --calendar-event-top: 42px;
+  --calendar-event-top: 38px;
   --calendar-today-size: 24px;
-  --calendar-week-height: 98px;
+  --calendar-week-height: 126px;
   --calendar-weekday-font-size: 13px;
   --calendar-weekday-height: 44px;
   background: #ffffff;
@@ -511,11 +511,23 @@ select {
   margin-right: 0;
 }
 
-.range-more-count {
-  bottom: 6px;
-  font-size: var(--calendar-event-font-size);
-  left: 12px;
+.range-more-layer {
+  bottom: 5px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  left: 0;
+  pointer-events: none;
   position: absolute;
+  right: 0;
+}
+
+.range-more-count {
+  font-size: var(--calendar-event-font-size);
+  overflow: hidden;
+  padding: 0 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendar-header {
@@ -657,6 +669,75 @@ select {
   color: #4b5563;
   line-height: 1.7;
   margin: 0;
+}
+
+.task-action-section {
+  border-top: 1px solid #edf0f6;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.task-action-section-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.task-comment-list,
+.task-attachment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-comment-item {
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid #edf0f6;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px;
+}
+
+.task-comment-meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.task-comment-item p {
+  color: #4b5563;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.task-attachment-item {
+  align-items: center;
+  border: 1px solid #edf0f6;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.task-attachment-item > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-attachment-form {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1.2fr) auto;
 }
 
 .task-table,
@@ -807,6 +888,10 @@ code {
   .task-row-meta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .task-attachment-form {
+    grid-template-columns: 1fr;
   }
 
   .calendar-header {

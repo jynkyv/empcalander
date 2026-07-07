@@ -47,9 +47,31 @@ create table if not exists public.task_assignees (
   primary key (task_id, user_id)
 );
 
+create table if not exists public.task_comments (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.task_attachments (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  uploaded_by uuid references public.profiles(id) on delete set null,
+  file_name text not null,
+  file_url text not null,
+  file_size bigint,
+  mime_type text,
+  oss_object_key text,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists tasks_starts_at_idx on public.tasks(starts_at);
 create index if not exists tasks_created_by_idx on public.tasks(created_by);
 create index if not exists task_assignees_user_id_idx on public.task_assignees(user_id);
+create index if not exists task_comments_task_id_idx on public.task_comments(task_id);
+create index if not exists task_attachments_task_id_idx on public.task_attachments(task_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -122,6 +144,8 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.tasks enable row level security;
 alter table public.task_assignees enable row level security;
+alter table public.task_comments enable row level security;
+alter table public.task_attachments enable row level security;
 
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read
@@ -222,3 +246,95 @@ using (
     where t.id = task_id and t.created_by = auth.uid()
   )
 );
+
+drop policy if exists task_comments_read_visible on public.task_comments;
+create policy task_comments_read_visible
+on public.task_comments for select
+to authenticated
+using (
+  public.is_admin()
+  or author_id = auth.uid()
+  or exists (
+    select 1 from public.tasks t
+    where t.id = task_id
+      and (
+        t.created_by = auth.uid()
+        or exists (
+          select 1 from public.task_assignees ta
+          where ta.task_id = t.id and ta.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists task_comments_insert_visible on public.task_comments;
+create policy task_comments_insert_visible
+on public.task_comments for insert
+to authenticated
+with check (
+  author_id = auth.uid()
+  and exists (
+    select 1 from public.tasks t
+    where t.id = task_id
+      and (
+        public.is_admin()
+        or t.created_by = auth.uid()
+        or exists (
+          select 1 from public.task_assignees ta
+          where ta.task_id = t.id and ta.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists task_comments_delete_own_or_admin on public.task_comments;
+create policy task_comments_delete_own_or_admin
+on public.task_comments for delete
+to authenticated
+using (author_id = auth.uid() or public.is_admin());
+
+drop policy if exists task_attachments_read_visible on public.task_attachments;
+create policy task_attachments_read_visible
+on public.task_attachments for select
+to authenticated
+using (
+  public.is_admin()
+  or uploaded_by = auth.uid()
+  or exists (
+    select 1 from public.tasks t
+    where t.id = task_id
+      and (
+        t.created_by = auth.uid()
+        or exists (
+          select 1 from public.task_assignees ta
+          where ta.task_id = t.id and ta.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists task_attachments_insert_visible on public.task_attachments;
+create policy task_attachments_insert_visible
+on public.task_attachments for insert
+to authenticated
+with check (
+  uploaded_by = auth.uid()
+  and exists (
+    select 1 from public.tasks t
+    where t.id = task_id
+      and (
+        public.is_admin()
+        or t.created_by = auth.uid()
+        or exists (
+          select 1 from public.task_assignees ta
+          where ta.task_id = t.id and ta.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists task_attachments_delete_own_or_admin on public.task_attachments;
+create policy task_attachments_delete_own_or_admin
+on public.task_attachments for delete
+to authenticated
+using (uploaded_by = auth.uid() or public.is_admin());

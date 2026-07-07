@@ -30,8 +30,10 @@ import {
   DeleteOutlined,
   LeftOutlined,
   MoreOutlined,
+  PaperClipOutlined,
   PlusOutlined,
   RightOutlined,
+  SendOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -47,6 +49,8 @@ import type {
   CalendarTask,
   CalendarUser,
   TaskPriority,
+  TaskAttachment,
+  TaskComment,
   TaskStatus,
 } from "@/lib/types";
 
@@ -134,6 +138,31 @@ type TaskRow = {
   task_assignees?: { user_id: string }[] | null;
 };
 
+type TaskCommentRow = {
+  id: string;
+  task_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+};
+
+type TaskAttachmentRow = {
+  id: string;
+  task_id: string;
+  uploaded_by: string | null;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  mime_type: string | null;
+  oss_object_key: string | null;
+  created_at: string;
+};
+
+type TaskAttachmentInput = {
+  fileName: string;
+  fileUrl: string;
+};
+
 function startOfCalendarMonth(month: Dayjs) {
   const firstDay = month.startOf("month");
 
@@ -188,6 +217,52 @@ function clampTaskToWeek(task: CalendarTask, weekStart: Dayjs) {
   };
 }
 
+type TaskWeekSegment = NonNullable<ReturnType<typeof clampTaskToWeek>>;
+
+type WeekTaskLayoutItem = {
+  lane: number;
+  segment: TaskWeekSegment;
+  task: CalendarTask;
+};
+
+function layoutWeekTasks(
+  tasks: CalendarTask[],
+  weekStart: Dayjs,
+  laneCount: number,
+) {
+  const lanes: Array<Array<{ endColumn: number; startColumn: number }>> = [];
+  const visible: WeekTaskLayoutItem[] = [];
+  const hiddenByDay = Array.from({ length: 7 }, () => 0);
+
+  tasks.forEach((task) => {
+    const segment = clampTaskToWeek(task, weekStart);
+
+    if (!segment) return;
+
+    const startColumn = segment.startColumn;
+    const endColumn = segment.startColumn + segment.span - 1;
+    const availableLane = lanes.findIndex((ranges) =>
+      ranges.every(
+        (range) => endColumn < range.startColumn || startColumn > range.endColumn,
+      ),
+    );
+    const lane = availableLane === -1 ? lanes.length : availableLane;
+
+    if (lane < laneCount) {
+      lanes[lane] = lanes[lane] || [];
+      lanes[lane].push({ endColumn, startColumn });
+      visible.push({ lane, segment, task });
+      return;
+    }
+
+    for (let dayIndex = startColumn - 1; dayIndex < endColumn; dayIndex += 1) {
+      hiddenByDay[dayIndex] += 1;
+    }
+  });
+
+  return { hiddenByDay, visible };
+}
+
 function profileToUser(profile: ProfileRow): CalendarUser {
   return {
     id: profile.id,
@@ -209,6 +284,30 @@ function taskRowToTask(task: TaskRow): CalendarTask {
     priority: task.priority,
     createdBy: task.created_by,
     assigneeIds: (task.task_assignees || []).map((assignee) => assignee.user_id),
+  };
+}
+
+function commentRowToComment(comment: TaskCommentRow): TaskComment {
+  return {
+    authorId: comment.author_id,
+    body: comment.body,
+    createdAt: comment.created_at,
+    id: comment.id,
+    taskId: comment.task_id,
+  };
+}
+
+function attachmentRowToAttachment(attachment: TaskAttachmentRow): TaskAttachment {
+  return {
+    createdAt: attachment.created_at,
+    fileName: attachment.file_name,
+    fileSize: attachment.file_size || undefined,
+    fileUrl: attachment.file_url,
+    id: attachment.id,
+    mimeType: attachment.mime_type || undefined,
+    ossObjectKey: attachment.oss_object_key || undefined,
+    taskId: attachment.task_id,
+    uploadedBy: attachment.uploaded_by || undefined,
   };
 }
 
@@ -257,6 +356,15 @@ function formatTaskRange(task: CalendarTask) {
   return `${start.format("M月D日（ddd） HH:mm")} - ${end.format("M月D日（ddd） HH:mm")}`;
 }
 
+function formatFileSize(size?: number) {
+  if (!size) return "";
+
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
+
+  return `${Math.round(size / 1024 / 102.4) / 10} MB`;
+}
+
 export function CalendarWorkspace({
   supabaseConfig,
 }: {
@@ -280,6 +388,11 @@ export function CalendarWorkspace({
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
+  const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
+  const [taskExtrasLoading, setTaskExtrasLoading] = useState(false);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [attachmentSubmitting, setAttachmentSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
@@ -400,6 +513,46 @@ export function CalendarWorkspace({
         value: user.id,
       })),
     [users],
+  );
+
+  const loadTaskExtras = useCallback(
+    async (taskId: string) => {
+      setTaskExtrasLoading(true);
+
+      try {
+        const [commentsResponse, attachmentsResponse] = await Promise.all([
+          fetch(`/api/tasks/${taskId}/comments`, { cache: "no-store" }),
+          fetch(`/api/tasks/${taskId}/attachments`, { cache: "no-store" }),
+        ]);
+        const commentsPayload = (await commentsResponse.json()) as {
+          comments?: TaskCommentRow[];
+          error?: string;
+        };
+        const attachmentsPayload = (await attachmentsResponse.json()) as {
+          attachments?: TaskAttachmentRow[];
+          error?: string;
+        };
+
+        if (!commentsResponse.ok || !attachmentsResponse.ok) {
+          message.error(
+            commentsPayload.error ||
+              attachmentsPayload.error ||
+              "タスク詳細の読み込みに失敗しました",
+          );
+          return;
+        }
+
+        setTaskComments((commentsPayload.comments || []).map(commentRowToComment));
+        setTaskAttachments(
+          (attachmentsPayload.attachments || []).map(attachmentRowToAttachment),
+        );
+      } catch {
+        message.error("タスク詳細の読み込みに失敗しました");
+      } finally {
+        setTaskExtrasLoading(false);
+      }
+    },
+    [message],
   );
 
   const calendarWeeks = useMemo(() => {
@@ -585,21 +738,107 @@ export function CalendarWorkspace({
   };
 
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
-    if (!supabase) return;
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/status`, {
+        body: JSON.stringify({ status }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+      const payload = (await response.json()) as { error?: string };
 
-    const { error } = await supabase.from("tasks").update({ status }).eq("id", taskId);
+      if (!response.ok) {
+        message.error(payload.error || "ステータスの更新に失敗しました");
+        return;
+      }
 
-    if (error) {
-      message.error(error.message);
-      return;
+      await loadWorkspaceData();
+      message.success("ステータスを更新しました");
+    } catch {
+      message.error("ステータスの更新に失敗しました");
+    }
+  };
+
+  const addTaskComment = async (taskId: string, body: string) => {
+    const commentBody = body.trim();
+
+    if (!commentBody) {
+      message.error("コメントを入力してください");
+      return false;
     }
 
-    await loadWorkspaceData();
-    message.success("ステータスを更新しました");
+    setCommentSubmitting(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/comments`, {
+        body: JSON.stringify({ body: commentBody }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        message.error(payload.error || "コメントの追加に失敗しました");
+        return false;
+      }
+
+      await loadTaskExtras(taskId);
+      message.success("コメントを追加しました");
+      return true;
+    } catch {
+      message.error("コメントの追加に失敗しました");
+      return false;
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
+  const addTaskAttachment = async (
+    taskId: string,
+    attachment: TaskAttachmentInput,
+  ) => {
+    const fileName = attachment.fileName.trim();
+    const fileUrl = attachment.fileUrl.trim();
+
+    if (!fileName || !fileUrl) {
+      message.error("ファイル名と URL を入力してください");
+      return false;
+    }
+
+    setAttachmentSubmitting(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+        body: JSON.stringify({ fileName, fileUrl }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        message.error(payload.error || "添付ファイルの登録に失敗しました");
+        return false;
+      }
+
+      await loadTaskExtras(taskId);
+      message.success("添付ファイルを登録しました");
+      return true;
+    } catch {
+      message.error("添付ファイルの登録に失敗しました");
+      return false;
+    } finally {
+      setAttachmentSubmitting(false);
+    }
   };
 
   const openTaskDetail = (task: CalendarTask) => {
+    setTaskComments([]);
+    setTaskAttachments([]);
     setActiveTaskId(task.id);
+    void loadTaskExtras(task.id);
+  };
+
+  const closeTaskDetail = () => {
+    setActiveTaskId(null);
+    setTaskComments([]);
+    setTaskAttachments([]);
   };
 
   if (!hasConfig || !supabase) {
@@ -813,11 +1052,19 @@ export function CalendarWorkspace({
       </Modal>
 
       <TaskActionModal
-        onClose={() => setActiveTaskId(null)}
+        attachments={taskAttachments}
+        attachmentSubmitting={attachmentSubmitting}
+        comments={taskComments}
+        commentSubmitting={commentSubmitting}
+        key={activeTask?.id || "task-modal-closed"}
+        onClose={closeTaskDetail}
+        onAddAttachment={addTaskAttachment}
+        onAddComment={addTaskComment}
         onDelete={deleteTask}
         onStatusChange={updateTaskStatus}
         currentUserId={currentUserId}
         deleting={activeTask?.id === deletingTaskId}
+        extrasLoading={taskExtrasLoading}
         task={activeTask}
         userById={userById}
       />
@@ -924,7 +1171,7 @@ function MonthRangeCalendar({
   tasks: CalendarTask[];
   weeks: Dayjs[][];
 }) {
-  const visibleWeekEventCount = 2;
+  const visibleWeekEventCount = 3;
 
   return (
     <div className="range-calendar">
@@ -943,6 +1190,11 @@ function MonthRangeCalendar({
               dayjs(a.startsAt).valueOf() - dayjs(b.startsAt).valueOf() ||
               endOfTask(b).valueOf() - endOfTask(a).valueOf(),
           );
+        const { hiddenByDay, visible } = layoutWeekTasks(
+          weekTasks,
+          weekStart,
+          visibleWeekEventCount,
+        );
 
         return (
           <div className="range-calendar-week" key={weekStart.format("YYYY-MM-DD")}>
@@ -986,15 +1238,12 @@ function MonthRangeCalendar({
               })}
             </div>
             <div className="range-event-layer">
-              {weekTasks.slice(0, visibleWeekEventCount).map((task, index) => {
-                const segment = clampTaskToWeek(task, weekStart);
+              {visible.map(({ lane, segment, task }) => {
                 const relation = relationForTask(task, currentUserId);
                 const relationStyle = relationMeta[relation];
                 const relationLabel = relationLabelForTask(task, currentUserId);
                 const priority = priorityMeta[task.priority];
                 const priorityColor = prioritySignalColor[task.priority];
-
-                if (!segment) return null;
 
                 return (
                   <button
@@ -1015,7 +1264,7 @@ function MonthRangeCalendar({
                       "--event-mid": relationStyle.mid,
                       "--event-soft": relationStyle.soft,
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
-                      gridRow: index + 1,
+                      gridRow: lane + 1,
                     } as CSSProperties}
                     title={`${task.title} · ${relationLabel} · 優先度${priority.label}`}
                     type="button"
@@ -1034,11 +1283,25 @@ function MonthRangeCalendar({
                 );
               })}
             </div>
-            {weekTasks.length > visibleWeekEventCount ? (
-              <Text className="range-more-count" type="secondary">
-                +{weekTasks.length - visibleWeekEventCount}件
-              </Text>
-            ) : null}
+            <div className="range-more-layer">
+              {hiddenByDay.map((count, dayIndex) =>
+                count > 0 ? (
+                  <Text
+                    className="range-more-count"
+                    key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
+                    style={{ gridColumn: dayIndex + 1 }}
+                    type="secondary"
+                  >
+                    +{count}件
+                  </Text>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
+                  />
+                ),
+              )}
+            </div>
           </div>
         );
       })}
@@ -1109,22 +1372,43 @@ function TaskDetailCard({
 }
 
 function TaskActionModal({
+  attachments,
+  attachmentSubmitting,
+  comments,
+  commentSubmitting,
   currentUserId,
   deleting,
+  extrasLoading,
+  onAddAttachment,
+  onAddComment,
   onDelete,
   onClose,
   onStatusChange,
   task,
   userById,
 }: {
+  attachments: TaskAttachment[];
+  attachmentSubmitting: boolean;
+  comments: TaskComment[];
+  commentSubmitting: boolean;
   currentUserId: string;
   deleting: boolean;
+  extrasLoading: boolean;
+  onAddAttachment: (
+    taskId: string,
+    attachment: TaskAttachmentInput,
+  ) => Promise<boolean>;
+  onAddComment: (taskId: string, body: string) => Promise<boolean>;
   onDelete: (task: CalendarTask) => void;
   onClose: () => void;
-  onStatusChange: (taskId: string, status: TaskStatus) => void;
+  onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
   task: CalendarTask | null;
   userById: Map<string, CalendarUser>;
 }) {
+  const [commentBody, setCommentBody] = useState("");
+  const [attachmentName, setAttachmentName] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+
   if (!task) return null;
 
   const assignees = task.assigneeIds
@@ -1137,6 +1421,24 @@ function TaskActionModal({
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
   const canDelete = task.createdBy === currentUserId;
+  const submitComment = async () => {
+    const created = await onAddComment(task.id, commentBody);
+
+    if (created) {
+      setCommentBody("");
+    }
+  };
+  const submitAttachment = async () => {
+    const created = await onAddAttachment(task.id, {
+      fileName: attachmentName,
+      fileUrl: attachmentUrl,
+    });
+
+    if (created) {
+      setAttachmentName("");
+      setAttachmentUrl("");
+    }
+  };
 
   return (
     <Modal
@@ -1168,6 +1470,7 @@ function TaskActionModal({
       onCancel={onClose}
       open
       title={task.title}
+      width={720}
     >
       <div className="task-action-body">
         <div className="task-action-status">
@@ -1198,6 +1501,114 @@ function TaskActionModal({
         <div className="task-action-description">
           <Text type="secondary">説明</Text>
           <p>{task.description || "補足説明はありません。"}</p>
+        </div>
+        <div className="task-action-section">
+          <div className="task-action-section-header">
+            <Text strong>コメント</Text>
+            {extrasLoading ? <Spin size="small" /> : null}
+          </div>
+          <div className="task-comment-list">
+            {comments.length === 0 ? (
+              <Text type="secondary">コメントはまだありません。</Text>
+            ) : (
+              comments.map((comment) => {
+                const author = userById.get(comment.authorId);
+
+                return (
+                  <div className="task-comment-item" key={comment.id}>
+                    <Avatar style={{ backgroundColor: author?.color || "#8a94a6" }}>
+                      {initials(author?.name || "?")}
+                    </Avatar>
+                    <div>
+                      <div className="task-comment-meta">
+                        <Text strong>{author?.name || "不明"}</Text>
+                        <Text type="secondary">
+                          {dayjs(comment.createdAt).format("M月D日 HH:mm")}
+                        </Text>
+                      </div>
+                      <p>{comment.body}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <Input.TextArea
+            onChange={(event) => setCommentBody(event.target.value)}
+            placeholder="コメントを入力"
+            rows={3}
+            value={commentBody}
+          />
+          <Button
+            icon={<SendOutlined />}
+            loading={commentSubmitting}
+            onClick={submitComment}
+            type="primary"
+          >
+            コメント追加
+          </Button>
+        </div>
+        <div className="task-action-section">
+          <div className="task-action-section-header">
+            <Text strong>添付ファイル</Text>
+            {extrasLoading ? <Spin size="small" /> : null}
+          </div>
+          <div className="task-attachment-list">
+            {attachments.length === 0 ? (
+              <Text type="secondary">添付ファイルはまだありません。</Text>
+            ) : (
+              attachments.map((attachment) => {
+                const uploader = attachment.uploadedBy
+                  ? userById.get(attachment.uploadedBy)
+                  : null;
+                const sizeLabel = formatFileSize(attachment.fileSize);
+
+                return (
+                  <a
+                    className="task-attachment-item"
+                    href={attachment.fileUrl}
+                    key={attachment.id}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <PaperClipOutlined />
+                    <span>{attachment.fileName}</span>
+                    <Text type="secondary">
+                      {[
+                        sizeLabel,
+                        uploader?.name,
+                        dayjs(attachment.createdAt).format("M月D日 HH:mm"),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Text>
+                  </a>
+                );
+              })
+            )}
+          </div>
+          <div className="task-attachment-form">
+            <Input
+              onChange={(event) => setAttachmentName(event.target.value)}
+              placeholder="ファイル名"
+              value={attachmentName}
+            />
+            <Input
+              onChange={(event) => setAttachmentUrl(event.target.value)}
+              placeholder="OSS URL"
+              value={attachmentUrl}
+            />
+            <Button
+              icon={<PaperClipOutlined />}
+              loading={attachmentSubmitting}
+              onClick={submitAttachment}
+            >
+              添付登録
+            </Button>
+          </div>
+          <Text type="secondary">
+            Aliyun OSS のアップロード連携後は、この添付登録に接続します。
+          </Text>
         </div>
       </div>
     </Modal>

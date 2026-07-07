@@ -23,3 +23,23 @@ export type CalendarTask = {
   createdBy: string;
   assigneeIds: string[];
 };
+
+export type TaskComment = {
+  id: string;
+  taskId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+};
+
+export type TaskAttachment = {
+  id: string;
+  taskId: string;
+  uploadedBy?: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize?: number;
+  mimeType?: string;
+  ossObjectKey?: string;
+  createdAt: string;
+};
