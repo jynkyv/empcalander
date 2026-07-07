@@ -973,6 +973,139 @@ select {
   white-space: nowrap;
 }
 
+.attachment-preview-page {
+  display: grid;
+  gap: 16px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.attachment-preview-header {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.attachment-preview-header h1 {
+  color: #172033;
+  font-size: 18px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.attachment-preview-label {
+  color: #7a8497;
+  font-size: 12px;
+  margin: 0;
+}
+
+.attachment-preview-header dl {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 18px;
+  margin: 0;
+}
+
+.attachment-preview-header dt {
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+.attachment-preview-header dd {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 650;
+  margin: 3px 0 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-preview-stage {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: min(72vh, 780px);
+  overflow: hidden;
+}
+
+.attachment-preview-frame,
+.attachment-preview-media {
+  background: #ffffff;
+  border: 0;
+  height: min(72vh, 780px);
+  width: 100%;
+}
+
+.attachment-preview-image-wrap {
+  height: min(72vh, 780px);
+  max-height: min(72vh, 780px);
+  max-width: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.attachment-preview-image {
+  object-fit: contain;
+}
+
+.attachment-preview-audio {
+  padding: 28px;
+  width: min(640px, 100%);
+}
+
+.attachment-preview-audio audio {
+  width: 100%;
+}
+
+.attachment-preview-empty {
+  align-items: center;
+  color: #6b7280;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 42px 18px;
+  text-align: center;
+}
+
+.attachment-preview-empty h1,
+.attachment-preview-empty h2 {
+  color: #172033;
+  margin: 0;
+}
+
+.attachment-preview-empty p {
+  margin: 0;
+}
+
+.preview-action-button {
+  align-items: center;
+  background: #2f6fed;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 650;
+  min-height: 36px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.preview-action-button:hover {
+  background: #245fd4;
+  color: #ffffff;
+}
+
 .task-comment-compose-actions {
   align-items: center;
   display: flex;

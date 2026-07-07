@@ -1636,10 +1636,10 @@ function MonthRangeCalendar({
 
 function notificationText(notification: TaskNotification) {
   if (notification.type === "done") {
-    return `${notification.actorName} がタスクを完了しました`;
+    return `${notification.actorName} が「${notification.taskTitle}」を完了しました`;
   }
 
-  return `${notification.actorName} がコメントしました`;
+  return `${notification.actorName} が「${notification.taskTitle}」にコメントしました`;
 }
 
 function NotificationPanel({
@@ -1670,8 +1670,9 @@ function NotificationPanel({
                 {initials(notification.actorName)}
               </Avatar>
               <div>
-                <div className="notification-title">{notification.taskTitle}</div>
-                <Text type="secondary">{notificationText(notification)}</Text>
+                <div className="notification-title">
+                  {notificationText(notification)}
+                </div>
                 <div className="notification-time">
                   {dayjs(notification.createdAt).format("M月D日 HH:mm")}
                 </div>
@@ -2131,7 +2132,7 @@ function TaskAttachmentItem({
   return (
     <a
       className="task-attachment-item"
-      href={attachment.fileUrl}
+      href={`/attachments/${attachment.id}/preview`}
       rel="noreferrer"
       target="_blank"
     >
