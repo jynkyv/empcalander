@@ -291,9 +291,9 @@ select {
   --calendar-event-height: 20px;
   --calendar-event-margin-x: 8px;
   --calendar-event-top: 35px;
-  --calendar-more-top: 128px;
+  --calendar-more-top: 132px;
   --calendar-today-size: 24px;
-  --calendar-week-height: 150px;
+  --calendar-week-height: 162px;
   --calendar-weekday-font-size: 13px;
   --calendar-weekday-height: 44px;
   background: #ffffff;
@@ -523,16 +523,20 @@ select {
 }
 
 .range-more-count {
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  color: #6b7280;
+  background: #172033;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.12);
+  color: #ffffff;
   cursor: pointer;
-  font-size: var(--calendar-event-font-size);
-  line-height: 18px;
-  margin: 0 var(--calendar-event-margin-x);
+  font-size: 11px;
+  font-weight: 750;
+  justify-self: start;
+  line-height: 20px;
+  margin: 0 0 0 var(--calendar-event-margin-x);
+  max-width: calc(100% - var(--calendar-event-margin-x) * 2);
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 9px;
   pointer-events: auto;
   text-align: left;
   text-overflow: ellipsis;
@@ -540,8 +544,8 @@ select {
 }
 
 .range-more-count:hover {
-  background: #eef4ff;
-  color: #2f6fed;
+  background: #2f6fed;
+  color: #ffffff;
 }
 
 .calendar-header {
@@ -620,8 +624,8 @@ select {
 }
 
 .task-card {
-  background: #ffffff;
-  border: 1px solid #e5eaf2;
+  background: var(--task-card-soft, #ffffff);
+  border: 1px solid var(--task-card-border, #e5eaf2);
   border-radius: 8px;
   box-shadow: 0 6px 18px rgba(28, 39, 64, 0.045);
   display: grid;
@@ -659,13 +663,10 @@ select {
 }
 
 .task-card.relation-sent {
-  --task-card-accent: #2f6fed;
   border-style: solid;
 }
 
 .task-card.relation-received {
-  --task-card-accent: #f59e0b;
-  border-color: #e9edf5;
   border-style: solid;
 }
 

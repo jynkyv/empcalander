@@ -1593,7 +1593,7 @@ function MonthRangeCalendar({
   unreadCountByTaskId: Record<string, number>;
   weeks: Dayjs[][];
 }) {
-  const visibleWeekEventCount = 4;
+  const visibleWeekEventCount = 5;
 
   return (
     <div className="range-calendar">
@@ -1830,6 +1830,7 @@ function TaskDetailCard({
   const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
+  const eventColor = taskColor(task);
   const hasDescription =
     task.description && task.description !== "補足説明はありません。";
   const attachmentCount = attachmentSummary?.count || 0;
@@ -1845,6 +1846,14 @@ function TaskDetailCard({
     <button
       className={`task-card task-card-button relation-${relation} is-${task.status}`}
       onClick={() => onOpen(task)}
+      style={
+        {
+          "--task-card-accent": eventColor.color,
+          "--task-card-border": eventColor.mid,
+          "--task-card-mid": eventColor.mid,
+          "--task-card-soft": eventColor.soft,
+        } as CSSProperties
+      }
       type="button"
     >
       <div className="task-card-header">
