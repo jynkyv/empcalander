@@ -645,7 +645,8 @@ select {
 
 .task-card-header,
 .task-card-footer,
-.task-card-assignees {
+.task-card-assignees,
+.task-card-creator {
   align-items: center;
   display: flex;
 }
@@ -656,15 +657,17 @@ select {
   min-width: 0;
 }
 
-.task-card-title-block {
+.task-card-title-scroll {
+  color: #172033;
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
 }
 
-.task-card-title-block h5 {
-  color: #172033;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.task-card-title-scroll::-webkit-scrollbar,
+.task-card-time span::-webkit-scrollbar {
+  display: none;
 }
 
 .task-card-time {
@@ -673,7 +676,6 @@ select {
   display: flex;
   font-size: 12px;
   gap: 5px;
-  margin-top: 5px;
   min-width: 0;
   white-space: nowrap;
 }
@@ -681,8 +683,8 @@ select {
 .task-card-time span {
   display: block;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-x: auto;
+  scrollbar-width: none;
   white-space: nowrap;
 }
 
@@ -738,19 +740,35 @@ select {
   padding-top: 9px;
 }
 
-.task-card-assignees {
+.task-card-assignees,
+.task-card-creator {
   gap: 8px;
+  min-width: 0;
 }
 
-.task-card-assignees .ant-typography {
+.task-card-creator {
+  justify-content: flex-start;
+}
+
+.task-card-assignees {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.task-card-assignees .ant-typography,
+.task-card-creator .ant-typography {
   font-size: 12px;
 }
 
-.task-card-priority-dot {
-  border-radius: 999px;
-  display: inline-block;
-  height: 9px;
-  width: 9px;
+.task-card-creator span {
+  color: #334155;
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-action-body {

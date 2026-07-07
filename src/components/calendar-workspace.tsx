@@ -1445,21 +1445,20 @@ function TaskDetailCard({
       type="button"
     >
       <div className="task-card-header">
-        <div className="task-card-title-block">
-          <Title level={5}>{task.title}</Title>
-          <div className="task-card-time">
-            <ClockCircleOutlined />
-            <span>{formatTaskRange(task)}</span>
-          </div>
-        </div>
+        <Title className="task-card-title-scroll" level={5}>
+          {task.title}
+        </Title>
         <Tag className="task-card-status" color={status.color}>
           {status.label}
         </Tag>
       </div>
+      <div className="task-card-time">
+        <ClockCircleOutlined />
+        <span>{formatTaskRange(task)}</span>
+      </div>
       <div className="task-card-tags">
         <Tag color={relationStyle.color}>{relationLabel}</Tag>
         <Tag color={priority.color}>優先度 {priority.label}</Tag>
-        <Tag>依頼者 {creator?.name || "不明"}</Tag>
       </div>
       {hasDescription ? (
         <p className="task-card-description">{task.description}</p>
@@ -1472,22 +1471,22 @@ function TaskDetailCard({
         </div>
       ) : null}
       <div className="task-card-footer">
+        <div className="task-card-creator">
+          <Text type="secondary">依頼者</Text>
+          <span>{creator?.name || "不明"}</span>
+        </div>
         <div className="task-card-assignees">
           <Text type="secondary">担当者</Text>
           <Avatar.Group max={{ count: 3 }}>
-          {assignees.map((user) => (
-            <Tooltip key={user.id} title={user.name}>
-              <Avatar style={{ backgroundColor: user.color }}>
-                {initials(user.name)}
-              </Avatar>
-            </Tooltip>
-          ))}
+            {assignees.map((user) => (
+              <Tooltip key={user.id} title={user.name}>
+                <Avatar style={{ backgroundColor: user.color }}>
+                  {initials(user.name)}
+                </Avatar>
+              </Tooltip>
+            ))}
           </Avatar.Group>
         </div>
-        <span
-          className="task-card-priority-dot"
-          style={{ backgroundColor: prioritySignalColor[task.priority] }}
-        />
       </div>
     </button>
   );
@@ -1659,6 +1658,25 @@ function TaskActionModal({
         <div className="task-action-description">
           <Text type="secondary">説明</Text>
           <p>{task.description || "補足説明はありません。"}</p>
+        </div>
+        <div className="task-action-section">
+          <div className="task-action-section-header">
+            <Text strong>添付ファイル</Text>
+            {extrasLoading ? <Spin size="small" /> : null}
+          </div>
+          <div className="task-attachment-list">
+            {attachments.length === 0 ? (
+              <Text type="secondary">添付ファイルはありません。</Text>
+            ) : (
+              attachments.map((attachment) => (
+                <TaskAttachmentItem
+                  attachment={attachment}
+                  key={attachment.id}
+                  userById={userById}
+                />
+              ))
+            )}
+          </div>
         </div>
         <div className="task-action-section">
           <div className="task-action-section-header">
