@@ -172,7 +172,7 @@ select {
 .content-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) clamp(292px, 27vw, 340px);
   padding: 16px;
 }
 
@@ -567,6 +567,7 @@ select {
 }
 
 .detail-panel {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -578,12 +579,20 @@ select {
 .detail-header {
   align-items: flex-start;
   display: flex;
+  gap: 10px;
   justify-content: space-between;
+  min-width: 0;
+}
+
+.detail-header > div {
+  min-width: 0;
 }
 
 .summary-row {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   justify-content: space-between;
 }
 
@@ -595,6 +604,7 @@ select {
 .relation-summary-row {
   color: #7a8497;
   display: flex;
+  flex-wrap: wrap;
   font-size: 12px;
   gap: 12px;
 }
@@ -669,6 +679,7 @@ select {
 }
 
 .task-card-header {
+  align-items: flex-start;
   gap: 12px;
   justify-content: space-between;
   min-width: 0;
@@ -676,6 +687,7 @@ select {
 
 .task-card-title-scroll {
   color: #172033;
+  flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -723,7 +735,9 @@ select {
 }
 
 .task-card-header .ant-space {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .task-card-description {
@@ -758,7 +772,9 @@ select {
 
 .task-card-footer {
   border-top: 1px solid #f0f3f8;
+  gap: 10px;
   justify-content: space-between;
+  min-width: 0;
   padding-top: 9px;
 }
 
@@ -769,11 +785,12 @@ select {
 }
 
 .task-card-creator {
+  flex: 1 1 auto;
   justify-content: flex-start;
 }
 
 .task-card-assignees {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   justify-content: flex-end;
 }
 
@@ -791,6 +808,36 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@container (max-width: 320px) {
+  .detail-panel {
+    padding: 14px;
+  }
+
+  .task-card {
+    padding: 12px 12px 11px 14px;
+  }
+
+  .task-card-header,
+  .task-card-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .task-card-header .ant-space,
+  .task-card-assignees {
+    justify-content: flex-start;
+  }
+
+  .task-card-header .ant-space {
+    flex-wrap: wrap;
+  }
+
+  .task-card-assignees,
+  .task-card-creator {
+    width: 100%;
+  }
 }
 
 .notification-panel {
