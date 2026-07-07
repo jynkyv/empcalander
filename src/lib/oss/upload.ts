@@ -37,7 +37,6 @@ function parseBucketValue(bucketValue: string) {
     return {
       bucket: trimmed,
       endpoint: normalizeEndpoint(process.env.OSS_ENDPOINT || process.env.OSS_REGION),
-      publicBaseUrl: "",
     };
   }
 
@@ -48,8 +47,18 @@ function parseBucketValue(bucketValue: string) {
   return {
     bucket,
     endpoint,
-    publicBaseUrl: `${bucketUrl.protocol}//${bucketUrl.hostname}`,
   };
+}
+
+function normalizeBaseUrl(value?: string) {
+  if (!value) return "";
+
+  const trimmed = value.trim().replace(/\/$/, "");
+
+  if (!trimmed) return "";
+  if (/^https?:\/\//.test(trimmed)) return trimmed;
+
+  return `https://${trimmed}`;
 }
 
 export function getOssConfig(): OssConfig | null {
@@ -62,8 +71,11 @@ export function getOssConfig(): OssConfig | null {
   }
 
   const parsedBucket = parseBucketValue(bucketValue);
+  const configuredPublicBaseUrl =
+    normalizeBaseUrl(process.env.OSS_PUBLIC_BASE_URL) ||
+    normalizeBaseUrl(process.env.OSS_CNAME_DOMAIN);
   const publicBaseUrl =
-    parsedBucket.publicBaseUrl || `https://${parsedBucket.bucket}.${parsedBucket.endpoint}`;
+    configuredPublicBaseUrl || `https://${parsedBucket.bucket}.${parsedBucket.endpoint}`;
 
   return {
     accessKeyId,

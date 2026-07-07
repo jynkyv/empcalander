@@ -54,6 +54,8 @@ OSS_ACCESS_KEY_SECRET=
 OSS_BUCKET=
 # 省略時は日本リージョン oss-ap-northeast-1.aliyuncs.com
 OSS_ENDPOINT=
+# CNAME / カスタムドメインで公開 URL を保存したい場合のみ設定
+OSS_PUBLIC_BASE_URL=
 ```
 
 Supabase SQL Editor で次を実行します。
@@ -63,6 +65,16 @@ supabase/schema.sql
 ```
 
 `SUPABASE_SECRET_KEY` と `OSS_ACCESS_KEY_SECRET` はサーバー側だけで使用します。ブラウザへ公開しないでください。`SUPABASE_PUBLISHABLE_KEY` はブラウザ側 Supabase client に渡されます。
+
+日本リージョンの OSS 例:
+
+```bash
+OSS_BUCKET=client-track-crm
+OSS_ENDPOINT=oss-ap-northeast-1.aliyuncs.com
+OSS_PUBLIC_BASE_URL=https://client-track-crm.oss-ap-northeast-1.aliyuncs.com
+```
+
+CNAME で公開する場合は `OSS_PUBLIC_BASE_URL=https://client-track-crm.ap-northeast-1.thepacificqlx.com` に変更します。
 
 ## 確認待ち
 
