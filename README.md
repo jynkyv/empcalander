@@ -75,6 +75,7 @@ OSS_PUBLIC_BASE_URL=https://client-track-crm.oss-ap-northeast-1.aliyuncs.com
 ```
 
 CNAME で公開する場合は `OSS_PUBLIC_BASE_URL=https://client-track-crm.ap-northeast-1.thepacificqlx.com` に変更します。
+`OSS_BUCKET` は `client-track-crm` を推奨します。誤って `client-track-crm.oss-ap-northeast-1.aliyuncs.com` のような bucket ドメインを入れても自動で bucket 名を解釈します。
 
 ## 確認待ち
 

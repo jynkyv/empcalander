@@ -6,6 +6,7 @@ type OssConfig = {
   bucket: string;
   endpoint: string;
   publicBaseUrl: string;
+  uploadBaseUrl: string;
 };
 
 export type UploadedOssFile = {
@@ -22,7 +23,10 @@ const maxUploadSize = 20 * 1024 * 1024;
 function normalizeEndpoint(value?: string) {
   if (!value) return defaultEndpoint;
 
-  const trimmed = value.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const trimmed = value
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
 
   if (trimmed.endsWith(".aliyuncs.com")) return trimmed;
   if (trimmed.startsWith("oss-")) return `${trimmed}.aliyuncs.com`;
@@ -30,23 +34,62 @@ function normalizeEndpoint(value?: string) {
   return `oss-${trimmed}.aliyuncs.com`;
 }
 
+function parseHostLikeBucket(value: string) {
+  const host = value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const labels = host.split(".");
+
+  if (labels.length < 2) {
+    return null;
+  }
+
+  const [bucket, ...domainParts] = labels;
+  const domain = domainParts.join(".");
+
+  if (!bucket || !domain) {
+    return null;
+  }
+
+  if (domain.startsWith("oss-") && domain.endsWith(".aliyuncs.com")) {
+    return {
+      bucket,
+      endpoint: domain,
+      publicBaseUrl: `https://${host}`,
+    };
+  }
+
+  return {
+    bucket,
+    endpoint: normalizeEndpoint(process.env.OSS_ENDPOINT || process.env.OSS_REGION),
+    publicBaseUrl: `https://${host}`,
+  };
+}
+
 function parseBucketValue(bucketValue: string) {
   const trimmed = bucketValue.trim();
 
   if (!/^https?:\/\//.test(trimmed)) {
+    const hostLikeBucket = parseHostLikeBucket(trimmed);
+
+    if (hostLikeBucket) {
+      return hostLikeBucket;
+    }
+
     return {
       bucket: trimmed,
       endpoint: normalizeEndpoint(process.env.OSS_ENDPOINT || process.env.OSS_REGION),
+      publicBaseUrl: "",
     };
   }
 
   const bucketUrl = new URL(trimmed);
-  const [bucket, ...endpointParts] = bucketUrl.hostname.split(".");
-  const endpoint = endpointParts.join(".");
+  const parsedHost = parseHostLikeBucket(bucketUrl.hostname);
+
+  if (parsedHost) return parsedHost;
 
   return {
-    bucket,
-    endpoint,
+    bucket: bucketUrl.hostname,
+    endpoint: normalizeEndpoint(process.env.OSS_ENDPOINT || process.env.OSS_REGION),
+    publicBaseUrl: `${bucketUrl.protocol}//${bucketUrl.hostname}`,
   };
 }
 
@@ -71,18 +114,24 @@ export function getOssConfig(): OssConfig | null {
   }
 
   const parsedBucket = parseBucketValue(bucketValue);
+  const endpoint = normalizeEndpoint(
+    process.env.OSS_ENDPOINT || process.env.OSS_REGION || parsedBucket.endpoint,
+  );
   const configuredPublicBaseUrl =
     normalizeBaseUrl(process.env.OSS_PUBLIC_BASE_URL) ||
     normalizeBaseUrl(process.env.OSS_CNAME_DOMAIN);
   const publicBaseUrl =
-    configuredPublicBaseUrl || `https://${parsedBucket.bucket}.${parsedBucket.endpoint}`;
+    configuredPublicBaseUrl ||
+    parsedBucket.publicBaseUrl ||
+    `https://${parsedBucket.bucket}.${endpoint}`;
 
   return {
     accessKeyId,
     accessKeySecret,
     bucket: parsedBucket.bucket,
-    endpoint: parsedBucket.endpoint,
+    endpoint,
     publicBaseUrl,
+    uploadBaseUrl: `https://${parsedBucket.bucket}.${endpoint}`,
   };
 }
 
@@ -153,16 +202,27 @@ export async function uploadFileToOss(taskId: string, file: File) {
     objectKey,
   });
   const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const uploadUrl = `${config.uploadBaseUrl}/${encodedObjectKey}`;
   const fileUrl = `${config.publicBaseUrl}/${encodedObjectKey}`;
-  const response = await fetch(fileUrl, {
-    body: fileBuffer,
-    headers: {
-      Authorization: `OSS ${config.accessKeyId}:${signature}`,
-      "Content-Type": contentType,
-      Date: date,
-    },
-    method: "PUT",
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(uploadUrl, {
+      body: fileBuffer,
+      headers: {
+        Authorization: `OSS ${config.accessKeyId}:${signature}`,
+        "Content-Type": contentType,
+        Date: date,
+      },
+      method: "PUT",
+    });
+  } catch (error) {
+    throw new Error(
+      `OSS への接続に失敗しました。bucket=${config.bucket}, endpoint=${config.endpoint}, url=${uploadUrl}, reason=${
+        error instanceof Error ? error.message : "unknown"
+      }`,
+    );
+  }
 
   if (!response.ok) {
     const responseText = await response.text();
