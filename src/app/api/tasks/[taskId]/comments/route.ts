@@ -175,6 +175,8 @@ export async function POST(request: Request, context: RouteContext) {
     );
 
     if (attachmentError) {
+      await admin.from("task_comments").delete().eq("id", data.id);
+
       return NextResponse.json({ error: attachmentError.message }, { status: 400 });
     }
   }

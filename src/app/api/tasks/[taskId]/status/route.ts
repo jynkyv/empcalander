@@ -41,21 +41,34 @@ export async function PATCH(request: Request, context: RouteContext) {
     return access.response;
   }
 
-  const { data, error } = await admin
+  if (status === access.task.status) {
+    return NextResponse.json({ task: { id: taskId, status } });
+  }
+
+  const shouldNotifyCompletion = status === "done";
+  const updateQuery = admin
     .from("tasks")
     .update({ status })
     .eq("id", taskId)
-    .select("id,status")
-    .single<{ id: string; status: TaskStatus }>();
+    .select("id,status");
+  const { data, error } = shouldNotifyCompletion
+    ? await updateQuery
+        .neq("status", "done")
+        .maybeSingle<{ id: string; status: TaskStatus }>()
+    : await updateQuery.single<{ id: string; status: TaskStatus }>();
 
-  if (error || !data) {
+  if (error) {
     return NextResponse.json(
-      { error: error?.message || "ステータスの更新に失敗しました。" },
+      { error: error.message },
       { status: 400 },
     );
   }
 
-  if (status === "done" && access.task.status !== "done") {
+  if (!data) {
+    return NextResponse.json({ task: { id: taskId, status } });
+  }
+
+  if (shouldNotifyCompletion) {
     const notificationResult = await createTaskNotifications({
       actorId: access.userId,
       admin,

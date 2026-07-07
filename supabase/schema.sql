@@ -89,6 +89,12 @@ create index if not exists task_attachments_comment_id_idx on public.task_attach
 create index if not exists task_notifications_recipient_unread_idx on public.task_notifications(recipient_id, read_at);
 create index if not exists task_notifications_task_id_idx on public.task_notifications(task_id);
 
+revoke update on public.profiles from anon, authenticated;
+grant update (full_name, color) on public.profiles to authenticated;
+revoke update on public.tasks from anon, authenticated;
+revoke update on public.task_notifications from anon, authenticated;
+grant update (read_at) on public.task_notifications to authenticated;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -171,7 +177,8 @@ to authenticated
 using (true);
 
 drop policy if exists profiles_update_self_or_admin on public.profiles;
-create policy profiles_update_self_or_admin
+drop policy if exists profiles_update_self_basic_or_admin on public.profiles;
+create policy profiles_update_self_basic_or_admin
 on public.profiles for update
 to authenticated
 using (id = auth.uid() or public.is_admin())
@@ -230,7 +237,6 @@ on public.task_assignees for select
 to authenticated
 using (
   user_id = auth.uid()
-  or assigned_by = auth.uid()
   or public.is_admin()
   or exists (
     select 1 from public.tasks t
@@ -243,11 +249,13 @@ create policy task_assignees_insert_owner_or_admin
 on public.task_assignees for insert
 to authenticated
 with check (
-  public.is_admin()
-  or assigned_by = auth.uid()
-  or exists (
-    select 1 from public.tasks t
-    where t.id = task_id and t.created_by = auth.uid()
+  assigned_by = auth.uid()
+  and (
+    public.is_admin()
+    or exists (
+      select 1 from public.tasks t
+      where t.id = task_id and t.created_by = auth.uid()
+    )
   )
 );
 
@@ -257,7 +265,6 @@ on public.task_assignees for delete
 to authenticated
 using (
   public.is_admin()
-  or assigned_by = auth.uid()
   or exists (
     select 1 from public.tasks t
     where t.id = task_id and t.created_by = auth.uid()

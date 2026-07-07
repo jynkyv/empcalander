@@ -122,6 +122,8 @@ export async function POST(request: Request) {
   });
 
   if (upsertError) {
+    await admin.auth.admin.deleteUser(data.user.id);
+
     return NextResponse.json({ error: upsertError.message }, { status: 400 });
   }
 
@@ -162,15 +164,6 @@ export async function DELETE(request: Request) {
       { error: "自分のアカウントは削除できません。" },
       { status: 400 },
     );
-  }
-
-  const { error: tasksError } = await admin
-    .from("tasks")
-    .delete()
-    .eq("created_by", userId);
-
-  if (tasksError) {
-    return NextResponse.json({ error: tasksError.message }, { status: 400 });
   }
 
   const { error } = await admin.auth.admin.deleteUser(userId);

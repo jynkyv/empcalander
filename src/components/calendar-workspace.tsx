@@ -30,6 +30,7 @@ import {
 import type { UploadProps } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
+import "dayjs/locale/ja";
 import {
   BellOutlined,
   ClockCircleOutlined,
@@ -63,6 +64,8 @@ import type {
 
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
+
+dayjs.locale("ja");
 
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 const statusFlow: TaskStatus[] = ["todo", "doing", "done"];
@@ -789,6 +792,12 @@ export function CalendarWorkspace({
       .insert(assigneeRows);
 
     if (assigneeError) {
+      await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", data.id)
+        .eq("created_by", currentUserId);
+
       message.error(assigneeError.message);
       return;
     }
