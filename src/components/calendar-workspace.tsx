@@ -29,6 +29,7 @@ import type { UploadProps } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
+  ClockCircleOutlined,
   DeleteOutlined,
   LeftOutlined,
   MoreOutlined,
@@ -61,6 +62,7 @@ const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+const statusFlow: TaskStatus[] = ["todo", "doing", "done"];
 
 type CalendarScope = "all" | "sent" | "received";
 type TaskRelation = "sent" | "received";
@@ -1425,6 +1427,8 @@ function TaskDetailCard({
   const relation = relationForTask(task, currentUserId);
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
+  const hasDescription =
+    task.description && task.description !== "補足説明はありません。";
   const attachmentCount = attachmentSummary?.count || 0;
   const attachmentLabel =
     attachmentSummary && attachmentCount > 0
@@ -1443,9 +1447,10 @@ function TaskDetailCard({
       <div className="task-card-header">
         <div className="task-card-title-block">
           <Title level={5}>{task.title}</Title>
-          <Text className="task-card-time" type="secondary">
-            {formatTaskRange(task)}
-          </Text>
+          <div className="task-card-time">
+            <ClockCircleOutlined />
+            <span>{formatTaskRange(task)}</span>
+          </div>
         </div>
         <Tag className="task-card-status" color={status.color}>
           {status.label}
@@ -1456,7 +1461,9 @@ function TaskDetailCard({
         <Tag color={priority.color}>優先度 {priority.label}</Tag>
         <Tag>依頼者 {creator?.name || "不明"}</Tag>
       </div>
-      <p className="task-card-description">{task.description}</p>
+      {hasDescription ? (
+        <p className="task-card-description">{task.description}</p>
+      ) : null}
       {attachmentLabel ? (
         <div className="task-card-attachment">
           <PaperClipOutlined />
@@ -1534,6 +1541,9 @@ function TaskActionModal({
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
   const canDelete = task.createdBy === currentUserId;
+  const currentStatusIndex = statusFlow.indexOf(task.status);
+  const previousStatus = statusFlow[currentStatusIndex - 1];
+  const nextStatus = statusFlow[currentStatusIndex + 1];
   const attachmentsByCommentId = new Map<string, TaskAttachment[]>();
 
   attachments.forEach((attachment) => {
@@ -1582,13 +1592,37 @@ function TaskActionModal({
               </Button>
             </Popconfirm>
           ) : null}
-          <Button onClick={() => onStatusChange(task.id, "todo")}>未着手</Button>
-          <Button onClick={() => onStatusChange(task.id, "doing")} type="primary">
-            進行中にする
-          </Button>
-          <Button onClick={() => onStatusChange(task.id, "done")} type="primary">
-            完了にする
-          </Button>
+          <Tooltip
+            title={
+              previousStatus
+                ? `${statusMeta[previousStatus].label}に戻す`
+                : "最初の状態です"
+            }
+          >
+            <Button
+              disabled={!previousStatus}
+              icon={<LeftOutlined />}
+              onClick={() => previousStatus && onStatusChange(task.id, previousStatus)}
+            >
+              戻す
+            </Button>
+          </Tooltip>
+          <Tooltip
+            title={
+              nextStatus
+                ? `${statusMeta[nextStatus].label}に進める`
+                : "完了済みです"
+            }
+          >
+            <Button
+              disabled={!nextStatus}
+              icon={<RightOutlined />}
+              onClick={() => nextStatus && onStatusChange(task.id, nextStatus)}
+              type="primary"
+            >
+              進める
+            </Button>
+          </Tooltip>
         </Space>
       }
       onCancel={onClose}
@@ -1699,9 +1733,6 @@ function TaskActionModal({
               送信
             </Button>
           </div>
-          <Text type="secondary">
-            ファイルは送信時に Aliyun OSS へアップロードされます。
-          </Text>
         </div>
       </div>
     </Modal>
