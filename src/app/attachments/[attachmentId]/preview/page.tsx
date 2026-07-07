@@ -91,6 +91,7 @@ export default async function AttachmentPreviewPage({ params }: PageProps) {
 
   const { attachment } = result;
   const inlineUrl = `/api/attachments/${attachment.id}/inline`;
+  const downloadUrl = `/api/attachments/${attachment.id}/download`;
   const mode = previewModeFor(attachment.fileName, attachment.mimeType);
   const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
     attachment.fileUrl,
@@ -101,11 +102,9 @@ export default async function AttachmentPreviewPage({ params }: PageProps) {
       actions={
         <a
           className="preview-action-button"
-          href={attachment.fileUrl}
-          rel="noreferrer"
-          target="_blank"
+          href={downloadUrl}
         >
-          原ファイルを開く
+          ダウンロード
         </a>
       }
       eyebrow="ファイルプレビュー"
@@ -167,7 +166,7 @@ export default async function AttachmentPreviewPage({ params }: PageProps) {
           {mode === "unsupported" ? (
             <div className="attachment-preview-empty">
               <h2>この形式はブラウザ内プレビューに対応していません</h2>
-              <p>上部の「原ファイルを開く」から確認してください。</p>
+              <p>上部の「ダウンロード」から確認してください。</p>
             </div>
           ) : null}
         </section>

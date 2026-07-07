@@ -940,7 +940,7 @@ select {
   color: #172033;
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
   padding: 9px 10px;
 }
@@ -949,7 +949,25 @@ select {
   background: #f8fbff;
 }
 
-.task-attachment-item > span:nth-child(2) {
+.task-attachment-preview-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.task-attachment-preview-button.is-disabled {
+  cursor: default;
+}
+
+.task-attachment-preview-button > span:nth-child(2) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1086,6 +1104,48 @@ select {
 
 .attachment-preview-empty p {
   margin: 0;
+}
+
+.attachment-preview-modal-body {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: min(68vh, 720px);
+  overflow: hidden;
+}
+
+.attachment-preview-modal-frame,
+.attachment-preview-modal-media {
+  background: #ffffff;
+  border: 0;
+  height: min(68vh, 720px);
+  width: 100%;
+}
+
+.attachment-preview-modal-image {
+  max-height: min(68vh, 720px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.attachment-preview-modal-audio {
+  padding: 28px;
+  width: min(640px, 100%);
+}
+
+.attachment-preview-modal-audio audio {
+  width: 100%;
+}
+
+.attachment-preview-modal-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 36px 18px;
+  text-align: center;
 }
 
 .preview-action-button {

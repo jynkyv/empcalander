@@ -33,18 +33,20 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const headers = new Headers();
-  const contentType = contentTypeForAttachment(
-    attachment.fileName,
-    attachment.mimeType || upstream.headers.get("content-type"),
-  );
   const contentLength = upstream.headers.get("content-length");
 
   headers.set("Cache-Control", "private, max-age=60");
   headers.set(
     "Content-Disposition",
-    contentDispositionHeader("inline", attachment.fileName),
+    contentDispositionHeader("attachment", attachment.fileName),
   );
-  headers.set("Content-Type", contentType);
+  headers.set(
+    "Content-Type",
+    contentTypeForAttachment(
+      attachment.fileName,
+      attachment.mimeType || upstream.headers.get("content-type"),
+    ),
+  );
 
   if (contentLength) {
     headers.set("Content-Length", contentLength);

@@ -35,6 +35,7 @@ import {
   BellOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   LeftOutlined,
   MoreOutlined,
   PaperClipOutlined,
@@ -199,6 +200,14 @@ type CommentAttachmentDraft = {
   mimeType?: string;
   uid: string;
 };
+
+type AttachmentPreviewMode =
+  | "audio"
+  | "image"
+  | "inline"
+  | "office"
+  | "unsupported"
+  | "video";
 
 function startOfCalendarMonth(month: Dayjs) {
   const firstDay = month.startOf("month");
@@ -418,6 +427,42 @@ function formatFileSize(size?: number) {
   if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
 
   return `${Math.round(size / 1024 / 102.4) / 10} MB`;
+}
+
+function attachmentExtension(fileName: string) {
+  const parts = fileName.toLowerCase().split(".");
+
+  return parts.length > 1 ? parts.at(-1) || "" : "";
+}
+
+function attachmentPreviewMode(attachment: TaskAttachment): AttachmentPreviewMode {
+  const mimeType = (attachment.mimeType || "").toLowerCase();
+  const extension = attachmentExtension(attachment.fileName);
+
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType === "application/pdf" ||
+    ["csv", "json", "log", "md", "pdf", "txt"].includes(extension)
+  ) {
+    return "inline";
+  }
+
+  if (
+    ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(extension) ||
+    mimeType.includes("wordprocessingml") ||
+    mimeType.includes("spreadsheetml") ||
+    mimeType.includes("presentationml") ||
+    mimeType === "application/msword" ||
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "application/vnd.ms-powerpoint"
+  ) {
+    return "office";
+  }
+
+  return "unsupported";
 }
 
 function fileToAttachmentDraft(file: File) {
@@ -1818,6 +1863,9 @@ function TaskActionModal({
   const [pendingAttachments, setPendingAttachments] = useState<
     CommentAttachmentDraft[]
   >([]);
+  const [previewAttachment, setPreviewAttachment] = useState<TaskAttachment | null>(
+    null,
+  );
 
   if (!task) return null;
 
@@ -1976,6 +2024,7 @@ function TaskActionModal({
                 <TaskAttachmentItem
                   attachment={attachment}
                   key={attachment.id}
+                  onPreview={setPreviewAttachment}
                   userById={userById}
                 />
               ))
@@ -2015,6 +2064,7 @@ function TaskActionModal({
                             <TaskAttachmentItem
                               attachment={attachment}
                               key={attachment.id}
+                              onPreview={setPreviewAttachment}
                               userById={userById}
                             />
                           ))}
@@ -2065,6 +2115,10 @@ function TaskActionModal({
           </div>
         </div>
       </div>
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+      />
     </Modal>
   );
 }
@@ -2102,9 +2156,11 @@ function PendingAttachmentList({
 
 function TaskAttachmentItem({
   attachment,
+  onPreview,
   userById,
 }: {
   attachment: TaskAttachment;
+  onPreview: (attachment: TaskAttachment) => void;
   userById: Map<string, CalendarUser>;
 }) {
   const uploader = attachment.uploadedBy ? userById.get(attachment.uploadedBy) : null;
@@ -2117,26 +2173,114 @@ function TaskAttachmentItem({
   ]
     .filter(Boolean)
     .join(" · ");
-  const content = (
-    <>
-      <PaperClipOutlined />
-      <span>{attachment.fileName}</span>
-      <Text type="secondary">{meta}</Text>
-    </>
-  );
-
   if (!attachment.fileUrl) {
-    return <div className="task-attachment-item">{content}</div>;
+    return (
+      <div className="task-attachment-item">
+        <Button disabled icon={<DownloadOutlined />} size="small" />
+        <div className="task-attachment-preview-button is-disabled">
+          <PaperClipOutlined />
+          <span>{attachment.fileName}</span>
+          <Text type="secondary">{meta}</Text>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <a
-      className="task-attachment-item"
-      href={`/attachments/${attachment.id}/preview`}
-      rel="noreferrer"
-      target="_blank"
+    <div className="task-attachment-item">
+      <Tooltip title="ダウンロード">
+        <Button
+          href={`/api/attachments/${attachment.id}/download`}
+          icon={<DownloadOutlined />}
+          size="small"
+        />
+      </Tooltip>
+      <button
+        className="task-attachment-preview-button"
+        onClick={() => onPreview(attachment)}
+        type="button"
+      >
+        <PaperClipOutlined />
+        <span>{attachment.fileName}</span>
+        <Text type="secondary">{meta}</Text>
+      </button>
+    </div>
+  );
+}
+
+function AttachmentPreviewModal({
+  attachment,
+  onClose,
+}: {
+  attachment: TaskAttachment | null;
+  onClose: () => void;
+}) {
+  if (!attachment) return null;
+
+  const inlineUrl = `/api/attachments/${attachment.id}/inline`;
+  const downloadUrl = `/api/attachments/${attachment.id}/download`;
+  const mode = attachmentPreviewMode(attachment);
+  const officeUrl = attachment.fileUrl
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+        attachment.fileUrl,
+      )}`
+    : "";
+
+  return (
+    <Modal
+      footer={
+        <Space>
+          <Button href={downloadUrl} icon={<DownloadOutlined />}>
+            ダウンロード
+          </Button>
+          <Button onClick={onClose} type="primary">
+            閉じる
+          </Button>
+        </Space>
+      }
+      onCancel={onClose}
+      open
+      title={attachment.fileName}
+      width="86vw"
     >
-      {content}
-    </a>
+      <div className="attachment-preview-modal-body">
+        {mode === "video" ? (
+          <video className="attachment-preview-modal-media" controls src={inlineUrl} />
+        ) : null}
+        {mode === "audio" ? (
+          <div className="attachment-preview-modal-audio">
+            <audio controls src={inlineUrl} />
+          </div>
+        ) : null}
+        {mode === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={attachment.fileName}
+            className="attachment-preview-modal-image"
+            src={inlineUrl}
+          />
+        ) : null}
+        {mode === "inline" ? (
+          <iframe
+            className="attachment-preview-modal-frame"
+            src={inlineUrl}
+            title={attachment.fileName}
+          />
+        ) : null}
+        {mode === "office" ? (
+          <iframe
+            className="attachment-preview-modal-frame"
+            src={officeUrl}
+            title={attachment.fileName}
+          />
+        ) : null}
+        {mode === "unsupported" ? (
+          <div className="attachment-preview-modal-empty">
+            <Text strong>この形式はブラウザ内プレビューに対応していません。</Text>
+            <Text type="secondary">ダウンロードして確認してください。</Text>
+          </div>
+        ) : null}
+      </div>
+    </Modal>
   );
 }
