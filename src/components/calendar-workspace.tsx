@@ -7,6 +7,7 @@ import {
   Alert,
   App,
   Avatar,
+  Badge,
   Button,
   DatePicker,
   Empty,
@@ -15,6 +16,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Popover,
   Progress,
   Segmented,
   Select,
@@ -29,6 +31,7 @@ import type { UploadProps } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
+  BellOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
   LeftOutlined,
@@ -171,6 +174,20 @@ type TaskAttachmentSummaryRow = {
 type TaskAttachmentSummary = {
   count: number;
   fileNames: string[];
+};
+
+type TaskNotificationType = "comment" | "done";
+
+type TaskNotification = {
+  actorColor: string;
+  actorId?: string;
+  actorName: string;
+  commentId?: string;
+  createdAt: string;
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  type: TaskNotificationType;
 };
 
 type CommentAttachmentDraft = {
@@ -446,6 +463,7 @@ export function CalendarWorkspace({
   const [taskAttachmentSummary, setTaskAttachmentSummary] = useState<
     Record<string, TaskAttachmentSummary>
   >({});
+  const [notifications, setNotifications] = useState<TaskNotification[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -487,6 +505,7 @@ export function CalendarWorkspace({
       setUsers([]);
       setTasks([]);
       setTaskAttachmentSummary({});
+      setNotifications([]);
       setAuthLoading(false);
       setDataLoading(false);
       return;
@@ -548,6 +567,18 @@ export function CalendarWorkspace({
         .returns<TaskAttachmentSummaryRow[]>();
 
       setTaskAttachmentSummary(buildTaskAttachmentSummary(attachmentRows || []));
+    }
+
+    const notificationsResponse = await fetch("/api/notifications", {
+      cache: "no-store",
+    });
+    const notificationsPayload = (await notificationsResponse.json()) as {
+      error?: string;
+      notifications?: TaskNotification[];
+    };
+
+    if (notificationsResponse.ok) {
+      setNotifications(notificationsPayload.notifications || []);
     }
 
     setAuthLoading(false);
@@ -653,6 +684,15 @@ export function CalendarWorkspace({
       ),
     [calendarScope, canManageAccounts, currentUserId, tasks],
   );
+  const unreadCountByTaskId = useMemo(
+    () =>
+      notifications.reduce<Record<string, number>>((counts, notification) => {
+        counts[notification.taskId] = (counts[notification.taskId] || 0) + 1;
+
+        return counts;
+      }, {}),
+    [notifications],
+  );
 
   const selectedTasks = useMemo(
     () => visibleTasks.filter((task) => isTaskOnDate(task, selectedDate)),
@@ -704,6 +744,7 @@ export function CalendarWorkspace({
     setUsers([]);
     setTasks([]);
     setTaskAttachmentSummary({});
+    setNotifications([]);
     router.replace("/login");
   };
 
@@ -899,17 +940,42 @@ export function CalendarWorkspace({
     }
   };
 
+  const markTaskNotificationsRead = async (taskId: string) => {
+    if (!unreadCountByTaskId[taskId]) return;
+
+    setNotifications((current) =>
+      current.filter((notification) => notification.taskId !== taskId),
+    );
+
+    const response = await fetch(`/api/tasks/${taskId}/notifications/read`, {
+      method: "PATCH",
+    });
+
+    if (!response.ok) {
+      void loadWorkspaceData();
+    }
+  };
+
   const openTaskDetail = (task: CalendarTask) => {
     setTaskComments([]);
     setTaskAttachments([]);
     setActiveTaskId(task.id);
     void loadTaskExtras(task.id);
+    void markTaskNotificationsRead(task.id);
   };
 
   const closeTaskDetail = () => {
     setActiveTaskId(null);
     setTaskComments([]);
     setTaskAttachments([]);
+  };
+
+  const openNotificationTask = (taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+
+    if (task) {
+      openTaskDetail(task);
+    }
   };
 
   if (!hasConfig || !supabase) {
@@ -954,6 +1020,20 @@ export function CalendarWorkspace({
           <Button loading={dataLoading} onClick={loadWorkspaceData}>
             更新
           </Button>
+          <Popover
+            content={
+              <NotificationPanel
+                notifications={notifications}
+                onOpenTask={openNotificationTask}
+              />
+            }
+            placement="bottomRight"
+            trigger="click"
+          >
+            <Badge count={notifications.length} size="small">
+              <Button icon={<BellOutlined />}>通知</Button>
+            </Badge>
+          </Popover>
           {canManageAccounts ? (
             <Button icon={<UserAddOutlined />} onClick={() => setMemberModalOpen(true)}>
               アカウント管理
@@ -1017,6 +1097,7 @@ export function CalendarWorkspace({
             currentUserId={currentUserId}
             selectedDate={selectedDate}
             tasks={visibleTasks}
+            unreadCountByTaskId={unreadCountByTaskId}
             weeks={calendarWeeks}
           />
         </section>
@@ -1049,6 +1130,7 @@ export function CalendarWorkspace({
                   currentUserId={currentUserId}
                   onOpen={openTaskDetail}
                   task={task}
+                  unreadCount={unreadCountByTaskId[task.id] || 0}
                   userById={userById}
                 />
               ))
@@ -1256,6 +1338,7 @@ function MonthRangeCalendar({
   onSelectTask,
   selectedDate,
   tasks,
+  unreadCountByTaskId,
   weeks,
 }: {
   calendarValue: Dayjs;
@@ -1265,6 +1348,7 @@ function MonthRangeCalendar({
   onSelectTask: (task: CalendarTask) => void;
   selectedDate: Dayjs;
   tasks: CalendarTask[];
+  unreadCountByTaskId: Record<string, number>;
   weeks: Dayjs[][];
 }) {
   const visibleWeekEventCount = 3;
@@ -1340,6 +1424,7 @@ function MonthRangeCalendar({
                 const relationLabel = relationLabelForTask(task, currentUserId);
                 const priority = priorityMeta[task.priority];
                 const priorityColor = prioritySignalColor[task.priority];
+                const unreadCount = unreadCountByTaskId[task.id] || 0;
 
                 return (
                   <button
@@ -1374,7 +1459,12 @@ function MonthRangeCalendar({
                             : priorityColor,
                       }}
                     />
-                    <span>{task.title}</span>
+                    <span className="range-event-title">{task.title}</span>
+                    {unreadCount > 0 ? (
+                      <span className="range-event-unread">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -1405,17 +1495,69 @@ function MonthRangeCalendar({
   );
 }
 
+function notificationText(notification: TaskNotification) {
+  if (notification.type === "done") {
+    return `${notification.actorName} がタスクを完了しました`;
+  }
+
+  return `${notification.actorName} がコメントしました`;
+}
+
+function NotificationPanel({
+  notifications,
+  onOpenTask,
+}: {
+  notifications: TaskNotification[];
+  onOpenTask: (taskId: string) => void;
+}) {
+  return (
+    <div className="notification-panel">
+      <div className="notification-panel-header">
+        <Text strong>通知</Text>
+        <Text type="secondary">{notifications.length}件</Text>
+      </div>
+      {notifications.length === 0 ? (
+        <Empty description="未読通知はありません" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <div className="notification-list">
+          {notifications.map((notification) => (
+            <button
+              className="notification-item"
+              key={notification.id}
+              onClick={() => onOpenTask(notification.taskId)}
+              type="button"
+            >
+              <Avatar style={{ backgroundColor: notification.actorColor }}>
+                {initials(notification.actorName)}
+              </Avatar>
+              <div>
+                <div className="notification-title">{notification.taskTitle}</div>
+                <Text type="secondary">{notificationText(notification)}</Text>
+                <div className="notification-time">
+                  {dayjs(notification.createdAt).format("M月D日 HH:mm")}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskDetailCard({
   attachmentSummary,
   currentUserId,
   onOpen,
   task,
+  unreadCount,
   userById,
 }: {
   attachmentSummary?: TaskAttachmentSummary;
   currentUserId: string;
   onOpen: (task: CalendarTask) => void;
   task: CalendarTask;
+  unreadCount: number;
   userById: Map<string, CalendarUser>;
 }) {
   const assignees = task.assigneeIds
@@ -1448,9 +1590,16 @@ function TaskDetailCard({
         <Title className="task-card-title-scroll" level={5}>
           {task.title}
         </Title>
-        <Tag className="task-card-status" color={status.color}>
-          {status.label}
-        </Tag>
+        <Space size={6}>
+          {unreadCount > 0 ? (
+            <Tag className="task-card-unread" color="red">
+              未読 {unreadCount}
+            </Tag>
+          ) : null}
+          <Tag className="task-card-status" color={status.color}>
+            {status.label}
+          </Tag>
+        </Space>
       </div>
       <div className="task-card-time">
         <ClockCircleOutlined />

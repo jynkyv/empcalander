@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createTaskNotifications } from "@/lib/notifications/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireTaskAccess } from "@/lib/tasks/server-access";
 import type { TaskStatus } from "@/lib/types";
@@ -52,6 +53,20 @@ export async function PATCH(request: Request, context: RouteContext) {
       { error: error?.message || "ステータスの更新に失敗しました。" },
       { status: 400 },
     );
+  }
+
+  if (status === "done" && access.task.status !== "done") {
+    const notificationResult = await createTaskNotifications({
+      actorId: access.userId,
+      admin,
+      task: access.task,
+      taskId,
+      type: "done",
+    });
+
+    if (notificationResult?.error) {
+      console.error("Failed to create completion notifications", notificationResult.error);
+    }
   }
 
   return NextResponse.json({ task: data });

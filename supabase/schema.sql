@@ -69,12 +69,25 @@ create table if not exists public.task_attachments (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.task_notifications (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  actor_id uuid references public.profiles(id) on delete set null,
+  type text not null check (type in ('comment', 'done')),
+  comment_id uuid references public.task_comments(id) on delete cascade,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists tasks_starts_at_idx on public.tasks(starts_at);
 create index if not exists tasks_created_by_idx on public.tasks(created_by);
 create index if not exists task_assignees_user_id_idx on public.task_assignees(user_id);
 create index if not exists task_comments_task_id_idx on public.task_comments(task_id);
 create index if not exists task_attachments_task_id_idx on public.task_attachments(task_id);
 create index if not exists task_attachments_comment_id_idx on public.task_attachments(comment_id);
+create index if not exists task_notifications_recipient_unread_idx on public.task_notifications(recipient_id, read_at);
+create index if not exists task_notifications_task_id_idx on public.task_notifications(task_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -149,6 +162,7 @@ alter table public.tasks enable row level security;
 alter table public.task_assignees enable row level security;
 alter table public.task_comments enable row level security;
 alter table public.task_attachments enable row level security;
+alter table public.task_notifications enable row level security;
 
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read
@@ -341,3 +355,16 @@ create policy task_attachments_delete_own_or_admin
 on public.task_attachments for delete
 to authenticated
 using (uploaded_by = auth.uid() or public.is_admin());
+
+drop policy if exists task_notifications_read_own on public.task_notifications;
+create policy task_notifications_read_own
+on public.task_notifications for select
+to authenticated
+using (recipient_id = auth.uid() or public.is_admin());
+
+drop policy if exists task_notifications_update_own on public.task_notifications;
+create policy task_notifications_update_own
+on public.task_notifications for update
+to authenticated
+using (recipient_id = auth.uid())
+with check (recipient_id = auth.uid());

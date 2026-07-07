@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 type TaskAccessRow = {
   id: string;
   created_by: string;
+  status?: string;
   task_assignees?: { user_id: string }[] | null;
 };
 
@@ -41,7 +42,7 @@ export async function requireTaskAccess(
 
   const { data: task, error: taskError } = await admin
     .from("tasks")
-    .select("id,created_by,task_assignees(user_id)")
+    .select("id,created_by,status,task_assignees(user_id)")
     .eq("id", taskId)
     .maybeSingle<TaskAccessRow>();
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createTaskNotifications } from "@/lib/notifications/server";
 import { uploadFileToOss, type UploadedOssFile } from "@/lib/oss/upload";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireTaskAccess } from "@/lib/tasks/server-access";
@@ -176,6 +177,19 @@ export async function POST(request: Request, context: RouteContext) {
     if (attachmentError) {
       return NextResponse.json({ error: attachmentError.message }, { status: 400 });
     }
+  }
+
+  const notificationResult = await createTaskNotifications({
+    actorId: access.userId,
+    admin,
+    commentId: data.id,
+    task: access.task,
+    taskId,
+    type: "comment",
+  });
+
+  if (notificationResult?.error) {
+    console.error("Failed to create comment notifications", notificationResult.error);
   }
 
   return NextResponse.json({ comment: data });

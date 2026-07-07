@@ -489,10 +489,27 @@ select {
   flex: 0 0 8px;
 }
 
-.range-event-bar span:last-child {
+.range-event-title {
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.range-event-unread {
+  align-items: center;
+  background: #e5484d;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 750;
+  height: 16px;
+  justify-content: center;
+  line-height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
 }
 
 .range-event-bar:hover {
@@ -699,9 +716,14 @@ select {
 }
 
 .task-card-tags .ant-tag,
-.task-card-status {
+.task-card-status,
+.task-card-unread {
   border-radius: 999px;
   margin-inline-end: 0;
+}
+
+.task-card-header .ant-space {
+  flex: 0 0 auto;
 }
 
 .task-card-description {
@@ -769,6 +791,59 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.notification-panel {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  width: 340px;
+}
+
+.notification-panel-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.notification-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.notification-item {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #edf0f6;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px;
+  text-align: left;
+}
+
+.notification-item:hover {
+  background: #f8fbff;
+  border-color: #cbd7ec;
+}
+
+.notification-title {
+  color: #172033;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-time {
+  color: #98a2b3;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .task-action-body {
