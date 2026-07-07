@@ -1585,7 +1585,7 @@ function MonthRangeCalendar({
   unreadCountByTaskId: Record<string, number>;
   weeks: Dayjs[][];
 }) {
-  const visibleWeekEventCount = 4;
+  const visibleWeekEventCount = 5;
 
   return (
     <div className="range-calendar">

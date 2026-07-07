@@ -287,10 +287,10 @@ select {
   --calendar-day-padding-x: 12px;
   --calendar-day-padding-y: 8px;
   --calendar-event-font-size: 12px;
-  --calendar-event-gap: 2px;
-  --calendar-event-height: 18px;
+  --calendar-event-gap: 1px;
+  --calendar-event-height: 16px;
   --calendar-event-margin-x: 8px;
-  --calendar-event-top: 32px;
+  --calendar-event-top: 36px;
   --calendar-today-size: 22px;
   --calendar-week-min-height: 124px;
   --calendar-weekday-font-size: 13px;
