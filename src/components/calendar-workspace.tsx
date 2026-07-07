@@ -97,14 +97,14 @@ const prioritySignalColor: Record<TaskPriority, string> = {
 };
 
 const taskColorPalette = [
-  { color: "#2f6fed", mid: "#dce9ff", soft: "#eef5ff" },
-  { color: "#17a765", mid: "#dff6e9", soft: "#f0fbf5" },
-  { color: "#e5484d", mid: "#ffe1e3", soft: "#fff3f3" },
-  { color: "#7f56d9", mid: "#eadfff", soft: "#f7f2ff" },
-  { color: "#0891b2", mid: "#d7f4fb", soft: "#effbfe" },
-  { color: "#dc6803", mid: "#fde7c8", soft: "#fff7ed" },
-  { color: "#0f766e", mid: "#ccfbf1", soft: "#effdfa" },
-  { color: "#c026d3", mid: "#f5d0fe", soft: "#fdf4ff" },
+  { color: "#2563eb", mid: "#60a5fa", soft: "#bfdbfe" },
+  { color: "#dc2626", mid: "#f87171", soft: "#fecaca" },
+  { color: "#16a34a", mid: "#4ade80", soft: "#bbf7d0" },
+  { color: "#7c3aed", mid: "#a78bfa", soft: "#ddd6fe" },
+  { color: "#ea580c", mid: "#fb923c", soft: "#fed7aa" },
+  { color: "#0891b2", mid: "#22d3ee", soft: "#a5f3fc" },
+  { color: "#db2777", mid: "#f472b6", soft: "#fbcfe8" },
+  { color: "#65a30d", mid: "#a3e635", soft: "#d9f99d" },
 ];
 
 const relationMeta: Record<
