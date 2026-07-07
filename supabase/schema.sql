@@ -160,6 +160,32 @@ as $$
   select public.current_user_role() = 'admin'::public.app_role;
 $$;
 
+create or replace function public.is_task_creator(target_task_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.tasks t
+    where t.id = target_task_id and t.created_by = auth.uid()
+  );
+$$;
+
+create or replace function public.is_task_assignee(target_task_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.task_assignees ta
+    where ta.task_id = target_task_id and ta.user_id = auth.uid()
+  );
+$$;
+
 create or replace function public.can_access_task(target_task_id uuid)
 returns boolean
 language sql
@@ -168,14 +194,8 @@ security definer
 set search_path = public
 as $$
   select public.is_admin()
-    or exists (
-      select 1 from public.tasks t
-      where t.id = target_task_id and t.created_by = auth.uid()
-    )
-    or exists (
-      select 1 from public.task_assignees ta
-      where ta.task_id = target_task_id and ta.user_id = auth.uid()
-    );
+    or public.is_task_creator(target_task_id)
+    or public.is_task_assignee(target_task_id);
 $$;
 
 create or replace function public.can_manage_task(target_task_id uuid)
@@ -186,10 +206,7 @@ security definer
 set search_path = public
 as $$
   select public.is_admin()
-    or exists (
-      select 1 from public.tasks t
-      where t.id = target_task_id and t.created_by = auth.uid()
-    );
+    or public.is_task_creator(target_task_id);
 $$;
 
 alter table public.profiles enable row level security;
@@ -217,7 +234,11 @@ drop policy if exists tasks_read_visible on public.tasks;
 create policy tasks_read_visible
 on public.tasks for select
 to authenticated
-using (public.can_access_task(id));
+using (
+  public.is_admin()
+  or created_by = auth.uid()
+  or public.is_task_assignee(id)
+);
 
 drop policy if exists tasks_insert_own on public.tasks;
 create policy tasks_insert_own
@@ -230,8 +251,16 @@ drop policy if exists tasks_update_visible on public.tasks;
 create policy tasks_update_visible
 on public.tasks for update
 to authenticated
-using (public.can_access_task(id))
-with check (public.can_access_task(id));
+using (
+  public.is_admin()
+  or created_by = auth.uid()
+  or public.is_task_assignee(id)
+)
+with check (
+  public.is_admin()
+  or created_by = auth.uid()
+  or public.is_task_assignee(id)
+);
 
 drop policy if exists tasks_delete_owner_or_admin on public.tasks;
 create policy tasks_delete_owner_or_admin
@@ -243,7 +272,11 @@ drop policy if exists task_assignees_read_visible on public.task_assignees;
 create policy task_assignees_read_visible
 on public.task_assignees for select
 to authenticated
-using (public.can_access_task(task_id));
+using (
+  public.is_admin()
+  or user_id = auth.uid()
+  or public.is_task_creator(task_id)
+);
 
 drop policy if exists task_assignees_insert_owner_or_admin on public.task_assignees;
 create policy task_assignees_insert_owner_or_admin
