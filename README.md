@@ -49,6 +49,11 @@ SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 SUPABASE_JWKS_URL=
+OSS_ACCESS_KEY_ID=
+OSS_ACCESS_KEY_SECRET=
+OSS_BUCKET=
+# 省略時は日本リージョン oss-ap-northeast-1.aliyuncs.com
+OSS_ENDPOINT=
 ```
 
 Supabase SQL Editor で次を実行します。
@@ -57,7 +62,7 @@ Supabase SQL Editor で次を実行します。
 supabase/schema.sql
 ```
 
-`SUPABASE_SECRET_KEY` はサーバー側の管理 API だけで使用します。ブラウザへ公開しないでください。`SUPABASE_PUBLISHABLE_KEY` はブラウザ側 Supabase client に渡されます。
+`SUPABASE_SECRET_KEY` と `OSS_ACCESS_KEY_SECRET` はサーバー側だけで使用します。ブラウザへ公開しないでください。`SUPABASE_PUBLISHABLE_KEY` はブラウザ側 Supabase client に渡されます。
 
 ## 確認待ち
 
