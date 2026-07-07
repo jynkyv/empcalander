@@ -116,7 +116,6 @@ type TaskFormValues = {
   title: string;
   range: [Dayjs, Dayjs];
   assigneeIds: string[];
-  status: TaskStatus;
   priority: TaskPriority;
   description?: string;
 };
@@ -735,7 +734,6 @@ export function CalendarWorkspace({
     setTaskDraftAttachments([]);
     taskForm.setFieldsValue({
       range: [date.hour(9).minute(0), date.hour(18).minute(0)],
-      status: "todo",
       priority: "normal",
       assigneeIds: [currentUserId],
     });
@@ -794,7 +792,7 @@ export function CalendarWorkspace({
           description: values.description || "補足説明はありません。",
           starts_at: start.toISOString(),
           ends_at: end.toISOString(),
-          status: values.status,
+          status: "todo",
           priority: values.priority,
           created_by: currentUserId,
         })
@@ -1258,26 +1256,15 @@ export function CalendarWorkspace({
               showSearch
             />
           </Form.Item>
-          <Flex gap={12}>
-            <Form.Item label="ステータス" name="status" style={{ flex: 1 }}>
-              <Select
-                options={[
-                  { label: "未着手", value: "todo" },
-                  { label: "進行中", value: "doing" },
-                  { label: "完了", value: "done" },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item label="優先度" name="priority" style={{ flex: 1 }}>
-              <Select
-                options={[
-                  { label: "低", value: "low" },
-                  { label: "通常", value: "normal" },
-                  { label: "高", value: "high" },
-                ]}
-              />
-            </Form.Item>
-          </Flex>
+          <Form.Item label="優先度" name="priority">
+            <Select
+              options={[
+                { label: "低", value: "low" },
+                { label: "通常", value: "normal" },
+                { label: "高", value: "high" },
+              ]}
+            />
+          </Form.Item>
           <Form.Item label="説明" name="description">
             <Input.TextArea placeholder="背景、依頼内容、注意事項など" rows={4} />
           </Form.Item>
