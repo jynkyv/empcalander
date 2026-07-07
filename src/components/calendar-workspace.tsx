@@ -482,9 +482,16 @@ export function CalendarWorkspace({
   const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
   const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
   const [taskExtrasLoading, setTaskExtrasLoading] = useState(false);
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
+  const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState<{
+    status: TaskStatus;
+    taskId: string;
+  } | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
 
@@ -736,23 +743,38 @@ export function CalendarWorkspace({
   };
 
   const closeTaskModal = () => {
+    if (taskSubmitting) return;
+
     setTaskModalOpen(false);
     setTaskDraftAttachments([]);
   };
 
   const signOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setUsers([]);
-    setTasks([]);
-    setTaskAttachmentSummary({});
-    setNotifications([]);
-    router.replace("/login");
+    if (!supabase || signingOut) return;
+
+    setSigningOut(true);
+
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        throw error;
+      }
+
+      setCurrentUser(null);
+      setUsers([]);
+      setTasks([]);
+      setTaskAttachmentSummary({});
+      setNotifications([]);
+      router.replace("/login");
+    } catch {
+      message.error("ログアウトに失敗しました");
+      setSigningOut(false);
+    }
   };
 
   const createTask = async (values: TaskFormValues) => {
-    if (!supabase || !currentUserId) return;
+    if (!supabase || !currentUserId || taskSubmitting) return;
 
     const [start, end] = values.range;
     const assigneeIds = Array.from(new Set(values.assigneeIds));
@@ -762,130 +784,166 @@ export function CalendarWorkspace({
       return;
     }
 
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        title: values.title,
-        description: values.description || "補足説明はありません。",
-        starts_at: start.toISOString(),
-        ends_at: end.toISOString(),
-        status: values.status,
-        priority: values.priority,
-        created_by: currentUserId,
-      })
-      .select("id")
-      .single<{ id: string }>();
+    setTaskSubmitting(true);
 
-    if (error || !data) {
-      message.error(error?.message || "タスクの作成に失敗しました");
-      return;
-    }
-
-    const assigneeRows = assigneeIds.map((userId) => ({
-      task_id: data.id,
-      user_id: userId,
-      assigned_by: currentUserId,
-    }));
-
-    const { error: assigneeError } = await supabase
-      .from("task_assignees")
-      .insert(assigneeRows);
-
-    if (assigneeError) {
-      await supabase
+    try {
+      const { data, error } = await supabase
         .from("tasks")
-        .delete()
-        .eq("id", data.id)
-        .eq("created_by", currentUserId);
+        .insert({
+          title: values.title,
+          description: values.description || "補足説明はありません。",
+          starts_at: start.toISOString(),
+          ends_at: end.toISOString(),
+          status: values.status,
+          priority: values.priority,
+          created_by: currentUserId,
+        })
+        .select("id")
+        .single<{ id: string }>();
 
-      message.error(assigneeError.message);
-      return;
-    }
+      if (error || !data) {
+        message.error(error?.message || "タスクの作成に失敗しました");
+        return;
+      }
 
-    const attachmentsUploaded =
-      taskDraftAttachments.length === 0 ||
-      (await addTaskComment(data.id, "", taskDraftAttachments, {
-        refresh: false,
-        successMessage: false,
+      const assigneeRows = assigneeIds.map((userId) => ({
+        task_id: data.id,
+        user_id: userId,
+        assigned_by: currentUserId,
       }));
 
-    setSelectedDate(start);
-    setCalendarValue(start);
-    setTaskModalOpen(false);
-    setTaskDraftAttachments([]);
-    taskForm.resetFields();
-    await loadWorkspaceData();
-    message.success(
-      attachmentsUploaded
-        ? "タスクを作成しました"
-        : "タスクを作成しました。添付ファイルは再度アップロードしてください",
-    );
+      const { error: assigneeError } = await supabase
+        .from("task_assignees")
+        .insert(assigneeRows);
+
+      if (assigneeError) {
+        await supabase
+          .from("tasks")
+          .delete()
+          .eq("id", data.id)
+          .eq("created_by", currentUserId);
+
+        message.error(assigneeError.message);
+        return;
+      }
+
+      const attachmentsUploaded =
+        taskDraftAttachments.length === 0 ||
+        (await addTaskComment(data.id, "", taskDraftAttachments, {
+          refresh: false,
+          successMessage: false,
+        }));
+
+      setSelectedDate(start);
+      setCalendarValue(start);
+      setTaskModalOpen(false);
+      setTaskDraftAttachments([]);
+      taskForm.resetFields();
+      await loadWorkspaceData();
+      message.success(
+        attachmentsUploaded
+          ? "タスクを作成しました"
+          : "タスクを作成しました。添付ファイルは再度アップロードしてください",
+      );
+    } catch {
+      message.error("タスクの作成に失敗しました");
+    } finally {
+      setTaskSubmitting(false);
+    }
   };
 
   const createMember = async (values: MemberFormValues) => {
-    const response = await fetch("/api/admin/users", {
-      body: JSON.stringify({
-        account: values.account,
-        password: values.password,
-        role: values.role,
-      }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-    });
-    const payload = (await response.json()) as { error?: string };
+    if (memberSubmitting) return;
 
-    if (!response.ok) {
-      message.error(payload.error || "アカウントの作成に失敗しました");
-      return;
+    setMemberSubmitting(true);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        body: JSON.stringify({
+          account: values.account,
+          password: values.password,
+          role: values.role,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        message.error(payload.error || "アカウントの作成に失敗しました");
+        return;
+      }
+
+      message.success("アカウントを作成しました");
+      setMemberModalOpen(false);
+      memberForm.resetFields();
+      await loadWorkspaceData();
+    } catch {
+      message.error("アカウントの作成に失敗しました");
+    } finally {
+      setMemberSubmitting(false);
     }
-
-    message.success("アカウントを作成しました");
-    setMemberModalOpen(false);
-    memberForm.resetFields();
-    await loadWorkspaceData();
   };
 
   const deleteMember = async (userId: string) => {
+    if (deletingUserId) return;
+
     setDeletingUserId(userId);
-    const response = await fetch("/api/admin/users", {
-      body: JSON.stringify({ userId }),
-      headers: { "Content-Type": "application/json" },
-      method: "DELETE",
-    });
-    const payload = (await response.json()) as { error?: string };
-    setDeletingUserId(null);
 
-    if (!response.ok) {
-      message.error(payload.error || "アカウントの削除に失敗しました");
-      return;
+    try {
+      const response = await fetch("/api/admin/users", {
+        body: JSON.stringify({ userId }),
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        message.error(payload.error || "アカウントの削除に失敗しました");
+        return;
+      }
+
+      message.success("アカウントを削除しました");
+      await loadWorkspaceData();
+    } catch {
+      message.error("アカウントの削除に失敗しました");
+    } finally {
+      setDeletingUserId(null);
     }
-
-    message.success("アカウントを削除しました");
-    await loadWorkspaceData();
   };
 
   const deleteTask = async (task: CalendarTask) => {
-    if (!supabase || task.createdBy !== currentUserId) return;
+    if (!supabase || task.createdBy !== currentUserId || deletingTaskId) return;
 
     setDeletingTaskId(task.id);
-    const { error } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", task.id)
-      .eq("created_by", currentUserId);
-    setDeletingTaskId(null);
 
-    if (error) {
-      message.error(error.message);
-      return;
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", task.id)
+        .eq("created_by", currentUserId);
+
+      if (error) {
+        message.error(error.message);
+        return;
+      }
+
+      setActiveTaskId(null);
+      await loadWorkspaceData();
+      message.success("タスクを削除しました");
+    } catch {
+      message.error("タスクの削除に失敗しました");
+    } finally {
+      setDeletingTaskId(null);
     }
-
-    setActiveTaskId(null);
-    await loadWorkspaceData();
-    message.success("タスクを削除しました");
   };
 
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    if (statusUpdating) return;
+
+    setStatusUpdating({ status, taskId });
+
     try {
       const response = await fetch(`/api/tasks/${taskId}/status`, {
         body: JSON.stringify({ status }),
@@ -903,6 +961,8 @@ export function CalendarWorkspace({
       message.success("ステータスを更新しました");
     } catch {
       message.error("ステータスの更新に失敗しました");
+    } finally {
+      setStatusUpdating(null);
     }
   };
 
@@ -1049,13 +1109,16 @@ export function CalendarWorkspace({
             </Button>
           ) : null}
           <Button
+            disabled={taskSubmitting}
             icon={<PlusOutlined />}
             onClick={() => openTaskModal()}
             type="primary"
           >
             タスク作成
           </Button>
-          <Button onClick={signOut}>ログアウト</Button>
+          <Button loading={signingOut} onClick={signOut}>
+            ログアウト
+          </Button>
           <Avatar className="profile-avatar">{initials(currentUser.name)}</Avatar>
         </Space>
       }
@@ -1149,6 +1212,8 @@ export function CalendarWorkspace({
       </div>
 
       <Modal
+        cancelButtonProps={{ disabled: taskSubmitting }}
+        confirmLoading={taskSubmitting}
         destroyOnHidden
         okText="作成"
         onCancel={closeTaskModal}
@@ -1156,7 +1221,12 @@ export function CalendarWorkspace({
         open={taskModalOpen}
         title="タスク作成"
       >
-        <Form form={taskForm} layout="vertical" onFinish={createTask}>
+        <Form
+          disabled={taskSubmitting}
+          form={taskForm}
+          layout="vertical"
+          onFinish={createTask}
+        >
           <Form.Item
             label="タスク名"
             name="title"
@@ -1222,14 +1292,18 @@ export function CalendarWorkspace({
 
                 return false;
               }}
+              disabled={taskSubmitting}
               fileList={[]}
               multiple
               showUploadList={false}
             >
-              <Button icon={<UploadOutlined />}>アップロード</Button>
+              <Button disabled={taskSubmitting} icon={<UploadOutlined />}>
+                アップロード
+              </Button>
             </Upload>
             <PendingAttachmentList
               attachments={taskDraftAttachments}
+              disabled={taskSubmitting}
               onRemove={(uid) =>
                 setTaskDraftAttachments((current) =>
                   current.filter((attachment) => attachment.uid !== uid),
@@ -1252,14 +1326,25 @@ export function CalendarWorkspace({
         currentUserId={currentUserId}
         deleting={activeTask?.id === deletingTaskId}
         extrasLoading={taskExtrasLoading}
+        statusUpdating={
+          statusUpdating && activeTask?.id === statusUpdating.taskId
+            ? statusUpdating.status
+            : null
+        }
         task={activeTask}
         userById={userById}
       />
 
       <Modal
+        cancelButtonProps={{ disabled: memberSubmitting }}
+        confirmLoading={memberSubmitting}
         destroyOnHidden
         okText="作成"
-        onCancel={() => setMemberModalOpen(false)}
+        onCancel={() => {
+          if (!memberSubmitting) {
+            setMemberModalOpen(false);
+          }
+        }}
         onOk={() => memberForm.submit()}
         open={memberModalOpen}
         title="アカウント管理"
@@ -1278,14 +1363,17 @@ export function CalendarWorkspace({
                 cancelText="キャンセル"
                 description={`${user.name} のアカウントを削除しますか？`}
                 disabled={user.id === currentUserId}
-                okButtonProps={{ danger: true }}
+                okButtonProps={{
+                  danger: true,
+                  loading: deletingUserId === user.id,
+                }}
                 okText="削除"
                 onConfirm={() => deleteMember(user.id)}
                 title="アカウント削除"
               >
                 <Button
                   danger
-                  disabled={user.id === currentUserId}
+                  disabled={user.id === currentUserId || Boolean(deletingUserId)}
                   icon={<DeleteOutlined />}
                   loading={deletingUserId === user.id}
                   title={user.id === currentUserId ? "現在のアカウントは削除できません" : "削除"}
@@ -1295,6 +1383,7 @@ export function CalendarWorkspace({
           ))}
         </div>
         <Form
+          disabled={memberSubmitting}
           form={memberForm}
           initialValues={{ role: "member" }}
           layout="vertical"
@@ -1661,6 +1750,7 @@ function TaskActionModal({
   onDelete,
   onClose,
   onStatusChange,
+  statusUpdating,
   task,
   userById,
 }: {
@@ -1678,6 +1768,7 @@ function TaskActionModal({
   onDelete: (task: CalendarTask) => void;
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
+  statusUpdating: TaskStatus | null;
   task: CalendarTask | null;
   userById: Map<string, CalendarUser>;
 }) {
@@ -1701,6 +1792,7 @@ function TaskActionModal({
   const currentStatusIndex = statusFlow.indexOf(task.status);
   const previousStatus = statusFlow[currentStatusIndex - 1];
   const nextStatus = statusFlow[currentStatusIndex + 1];
+  const statusChanging = Boolean(statusUpdating);
   const attachmentsByCommentId = new Map<string, TaskAttachment[]>();
 
   attachments.forEach((attachment) => {
@@ -1711,6 +1803,10 @@ function TaskActionModal({
 
   const uploadProps: UploadProps = {
     beforeUpload: (file) => {
+      if (commentSubmitting) {
+        return false;
+      }
+
       setPendingAttachments((current) => [
         ...current,
         fileToAttachmentDraft(file),
@@ -1718,6 +1814,7 @@ function TaskActionModal({
 
       return false;
     },
+    disabled: commentSubmitting,
     fileList: [],
     multiple: true,
     showUploadList: false,
@@ -1744,7 +1841,12 @@ function TaskActionModal({
               onConfirm={() => onDelete(task)}
               title="タスク削除"
             >
-              <Button danger icon={<DeleteOutlined />} loading={deleting}>
+              <Button
+                danger
+                disabled={statusChanging}
+                icon={<DeleteOutlined />}
+                loading={deleting}
+              >
                 タスク削除
               </Button>
             </Popconfirm>
@@ -1757,8 +1859,9 @@ function TaskActionModal({
             }
           >
             <Button
-              disabled={!previousStatus}
+              disabled={!previousStatus || statusChanging}
               icon={<LeftOutlined />}
+              loading={statusUpdating === previousStatus}
               onClick={() => previousStatus && onStatusChange(task.id, previousStatus)}
             >
               戻す
@@ -1772,8 +1875,9 @@ function TaskActionModal({
             }
           >
             <Button
-              disabled={!nextStatus}
+              disabled={!nextStatus || statusChanging}
               icon={<RightOutlined />}
+              loading={statusUpdating === nextStatus}
               onClick={() => nextStatus && onStatusChange(task.id, nextStatus)}
               type="primary"
             >
@@ -1881,6 +1985,7 @@ function TaskActionModal({
             )}
           </div>
           <Input.TextArea
+            disabled={commentSubmitting}
             onChange={(event) => setCommentBody(event.target.value)}
             placeholder="コメントを入力"
             rows={3}
@@ -1889,6 +1994,7 @@ function TaskActionModal({
           {pendingAttachments.length > 0 ? (
             <PendingAttachmentList
               attachments={pendingAttachments}
+              disabled={commentSubmitting}
               onRemove={(uid) =>
                 setPendingAttachments((current) =>
                   current.filter((attachment) => attachment.uid !== uid),
@@ -1898,9 +2004,15 @@ function TaskActionModal({
           ) : null}
           <div className="task-comment-compose-actions">
             <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />}>アップロード</Button>
+              <Button disabled={commentSubmitting} icon={<UploadOutlined />}>
+                アップロード
+              </Button>
             </Upload>
             <Button
+              disabled={
+                commentSubmitting ||
+                (!commentBody.trim() && pendingAttachments.length === 0)
+              }
               icon={<SendOutlined />}
               loading={commentSubmitting}
               onClick={submitComment}
@@ -1917,9 +2029,11 @@ function TaskActionModal({
 
 function PendingAttachmentList({
   attachments,
+  disabled = false,
   onRemove,
 }: {
   attachments: CommentAttachmentDraft[];
+  disabled?: boolean;
   onRemove: (uid: string) => void;
 }) {
   if (attachments.length === 0) return null;
@@ -1932,6 +2046,7 @@ function PendingAttachmentList({
           <span>{attachment.fileName}</span>
           <Text type="secondary">{formatFileSize(attachment.fileSize)}</Text>
           <Button
+            disabled={disabled}
             icon={<DeleteOutlined />}
             onClick={() => onRemove(attachment.uid)}
             size="small"
