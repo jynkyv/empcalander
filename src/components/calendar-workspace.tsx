@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
@@ -493,6 +493,8 @@ export function CalendarWorkspace({
   } | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
   const [memberForm] = Form.useForm<MemberFormValues>();
+  const workspaceLoadIdRef = useRef(0);
+  const taskExtrasLoadIdRef = useRef(0);
 
   const currentUserId = currentUser?.id || "";
   const canManageAccounts = currentUser?.role === "admin";
@@ -503,95 +505,126 @@ export function CalendarWorkspace({
       return;
     }
 
+    const requestId = workspaceLoadIdRef.current + 1;
+    workspaceLoadIdRef.current = requestId;
+    const isCurrentRequest = () => workspaceLoadIdRef.current === requestId;
+
     setDataLoading(true);
     setWorkspaceError(null);
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    const authUser = authData.user;
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !authUser) {
-      setCurrentUser(null);
-      setUsers([]);
-      setTasks([]);
-      setTaskAttachmentSummary({});
-      setNotifications([]);
-      setAuthLoading(false);
-      setDataLoading(false);
-      return;
-    }
+      if (!isCurrentRequest()) return;
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id,email,full_name,role,color")
-      .eq("id", authUser.id)
-      .maybeSingle<ProfileRow>();
+      const authUser = authData.user;
 
-    if (profileError || !profile) {
+      if (authError || !authUser) {
+        setCurrentUser(null);
+        setUsers([]);
+        setTasks([]);
+        setTaskAttachmentSummary({});
+        setNotifications([]);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id,email,full_name,role,color")
+        .eq("id", authUser.id)
+        .maybeSingle<ProfileRow>();
+
+      if (!isCurrentRequest()) return;
+
+      if (profileError || !profile) {
+        setWorkspaceError(
+          profileError?.message ||
+            "現在のアカウントに profile がありません。schema.sql が実行済みか確認してください。",
+        );
+        setCurrentUser(null);
+        setUsers([]);
+        setTasks([]);
+        setTaskAttachmentSummary({});
+        setNotifications([]);
+        return;
+      }
+
+      const currentProfile = profileToUser(profile);
+      setCurrentUser(currentProfile);
+
+      const usersResponse = await fetch("/api/users", { cache: "no-store" });
+      const usersPayload = (await usersResponse.json()) as {
+        error?: string;
+        users?: ProfileRow[];
+      };
+
+      if (!isCurrentRequest()) return;
+
+      if (!usersResponse.ok) {
+        setWorkspaceError(usersPayload.error || "アカウント一覧の読み込みに失敗しました");
+        setUsers([currentProfile]);
+      } else {
+        const workspaceUsers = (usersPayload.users || []).map(profileToUser);
+        setUsers(workspaceUsers.length > 0 ? workspaceUsers : [currentProfile]);
+      }
+
+      const { data: taskRows, error: tasksError } = await supabase
+        .from("tasks")
+        .select(
+          "id,title,description,starts_at,ends_at,status,priority,created_by,task_assignees(user_id)",
+        )
+        .order("starts_at", { ascending: true })
+        .returns<TaskRow[]>();
+
+      if (!isCurrentRequest()) return;
+
+      if (tasksError) {
+        setWorkspaceError(tasksError.message);
+        setTasks([]);
+        setTaskAttachmentSummary({});
+      } else {
+        setTasks((taskRows || []).map(taskRowToTask));
+
+        const { data: attachmentRows } = await supabase
+          .from("task_attachments")
+          .select("task_id,file_name")
+          .order("created_at", { ascending: true })
+          .returns<TaskAttachmentSummaryRow[]>();
+
+        if (!isCurrentRequest()) return;
+
+        setTaskAttachmentSummary(buildTaskAttachmentSummary(attachmentRows || []));
+      }
+
+      try {
+        const notificationsResponse = await fetch("/api/notifications", {
+          cache: "no-store",
+        });
+        const notificationsPayload = (await notificationsResponse.json()) as {
+          error?: string;
+          notifications?: TaskNotification[];
+        };
+
+        if (!isCurrentRequest()) return;
+
+        if (notificationsResponse.ok) {
+          setNotifications(notificationsPayload.notifications || []);
+        }
+      } catch {
+        // Notification fetch is non-blocking for the calendar itself.
+      }
+    } catch (error) {
+      if (!isCurrentRequest()) return;
+
       setWorkspaceError(
-        profileError?.message ||
-          "現在のアカウントに profile がありません。schema.sql が実行済みか確認してください。",
+        error instanceof Error ? error.message : "データの読み込みに失敗しました",
       );
-      setCurrentUser(null);
-      setAuthLoading(false);
-      setDataLoading(false);
-      return;
+    } finally {
+      if (isCurrentRequest()) {
+        setAuthLoading(false);
+        setDataLoading(false);
+      }
     }
-
-    const currentProfile = profileToUser(profile);
-    setCurrentUser(currentProfile);
-
-    const usersResponse = await fetch("/api/users", { cache: "no-store" });
-    const usersPayload = (await usersResponse.json()) as {
-      error?: string;
-      users?: ProfileRow[];
-    };
-
-    if (!usersResponse.ok) {
-      setWorkspaceError(usersPayload.error || "アカウント一覧の読み込みに失敗しました");
-      setUsers([currentProfile]);
-    } else {
-      const workspaceUsers = (usersPayload.users || []).map(profileToUser);
-      setUsers(workspaceUsers.length > 0 ? workspaceUsers : [currentProfile]);
-    }
-
-    const { data: taskRows, error: tasksError } = await supabase
-      .from("tasks")
-      .select(
-        "id,title,description,starts_at,ends_at,status,priority,created_by,task_assignees(user_id)",
-      )
-      .order("starts_at", { ascending: true })
-      .returns<TaskRow[]>();
-
-    if (tasksError) {
-      setWorkspaceError(tasksError.message);
-      setTasks([]);
-      setTaskAttachmentSummary({});
-    } else {
-      setTasks((taskRows || []).map(taskRowToTask));
-
-      const { data: attachmentRows } = await supabase
-        .from("task_attachments")
-        .select("task_id,file_name")
-        .order("created_at", { ascending: true })
-        .returns<TaskAttachmentSummaryRow[]>();
-
-      setTaskAttachmentSummary(buildTaskAttachmentSummary(attachmentRows || []));
-    }
-
-    const notificationsResponse = await fetch("/api/notifications", {
-      cache: "no-store",
-    });
-    const notificationsPayload = (await notificationsResponse.json()) as {
-      error?: string;
-      notifications?: TaskNotification[];
-    };
-
-    if (notificationsResponse.ok) {
-      setNotifications(notificationsPayload.notifications || []);
-    }
-
-    setAuthLoading(false);
-    setDataLoading(false);
   }, [supabase]);
 
   useEffect(() => {
@@ -608,6 +641,8 @@ export function CalendarWorkspace({
     return () => {
       window.clearTimeout(initialLoad);
       data.subscription.unsubscribe();
+      workspaceLoadIdRef.current += 1;
+      taskExtrasLoadIdRef.current += 1;
     };
   }, [loadWorkspaceData, supabase]);
 
@@ -636,6 +671,10 @@ export function CalendarWorkspace({
 
   const loadTaskExtras = useCallback(
     async (taskId: string) => {
+      const requestId = taskExtrasLoadIdRef.current + 1;
+      taskExtrasLoadIdRef.current = requestId;
+      const isCurrentRequest = () => taskExtrasLoadIdRef.current === requestId;
+
       setTaskExtrasLoading(true);
 
       try {
@@ -643,6 +682,9 @@ export function CalendarWorkspace({
           fetch(`/api/tasks/${taskId}/comments`, { cache: "no-store" }),
           fetch(`/api/tasks/${taskId}/attachments`, { cache: "no-store" }),
         ]);
+
+        if (!isCurrentRequest()) return;
+
         const commentsPayload = (await commentsResponse.json()) as {
           comments?: TaskCommentRow[];
           error?: string;
@@ -651,6 +693,8 @@ export function CalendarWorkspace({
           attachments?: TaskAttachmentRow[];
           error?: string;
         };
+
+        if (!isCurrentRequest()) return;
 
         if (!commentsResponse.ok || !attachmentsResponse.ok) {
           message.error(
@@ -666,9 +710,13 @@ export function CalendarWorkspace({
           (attachmentsPayload.attachments || []).map(attachmentRowToAttachment),
         );
       } catch {
-        message.error("タスク詳細の読み込みに失敗しました");
+        if (isCurrentRequest()) {
+          message.error("タスク詳細の読み込みに失敗しました");
+        }
       } finally {
-        setTaskExtrasLoading(false);
+        if (isCurrentRequest()) {
+          setTaskExtrasLoading(false);
+        }
       }
     },
     [message],
@@ -1014,11 +1062,15 @@ export function CalendarWorkspace({
       current.filter((notification) => notification.taskId !== taskId),
     );
 
-    const response = await fetch(`/api/tasks/${taskId}/notifications/read`, {
-      method: "PATCH",
-    });
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/notifications/read`, {
+        method: "PATCH",
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        void loadWorkspaceData();
+      }
+    } catch {
       void loadWorkspaceData();
     }
   };
@@ -1032,6 +1084,8 @@ export function CalendarWorkspace({
   };
 
   const closeTaskDetail = () => {
+    taskExtrasLoadIdRef.current += 1;
+    setTaskExtrasLoading(false);
     setActiveTaskId(null);
     setTaskComments([]);
     setTaskAttachments([]);

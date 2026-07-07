@@ -80,6 +80,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (role !== "admin" && role !== "member") {
+    return NextResponse.json(
+      { error: "権限の値が正しくありません。" },
+      { status: 400 },
+    );
+  }
+
   const accountValidationError = getAccountValidationError(account);
 
   if (accountValidationError) {
@@ -102,7 +109,6 @@ export async function POST(request: Request) {
     email_confirm: true,
     user_metadata: {
       full_name: account,
-      role,
     },
   });
 
