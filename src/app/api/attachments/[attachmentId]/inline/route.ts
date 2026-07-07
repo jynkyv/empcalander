@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  contentDispositionHeader,
-  contentTypeForAttachment,
-} from "@/lib/attachments/response";
+import { contentTypeForAttachment } from "@/lib/attachments/response";
 import { getAttachmentPreviewData } from "@/lib/attachments/server";
 
 export const runtime = "nodejs";
@@ -40,10 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const contentLength = upstream.headers.get("content-length");
 
   headers.set("Cache-Control", "private, max-age=60");
-  headers.set(
-    "Content-Disposition",
-    contentDispositionHeader("inline", attachment.fileName),
-  );
+  headers.set("Content-Disposition", "inline");
   headers.set("Content-Type", contentType);
 
   if (contentLength) {

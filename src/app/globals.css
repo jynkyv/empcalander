@@ -940,7 +940,7 @@ select {
   color: #172033;
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
   padding: 9px 10px;
 }
@@ -949,28 +949,27 @@ select {
   background: #f8fbff;
 }
 
-.task-attachment-preview-button {
+.task-attachment-info {
   align-items: center;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
   display: grid;
   gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
-  padding: 0;
-  text-align: left;
 }
 
-.task-attachment-preview-button.is-disabled {
-  cursor: default;
-}
-
-.task-attachment-preview-button > span:nth-child(2) {
+.task-attachment-info > span:nth-child(2),
+.task-attachment-info .ant-typography {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-attachment-info .ant-typography {
+  grid-column: 2;
+}
+
+.task-attachment-actions {
+  flex-shrink: 0;
 }
 
 .task-pending-attachment-item {

@@ -36,6 +36,7 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  EyeOutlined,
   LeftOutlined,
   MoreOutlined,
   PaperClipOutlined,
@@ -2157,37 +2158,41 @@ function TaskAttachmentItem({
   ]
     .filter(Boolean)
     .join(" · ");
-  if (!attachment.fileUrl) {
-    return (
-      <div className="task-attachment-item">
-        <Button disabled icon={<DownloadOutlined />} size="small" />
-        <div className="task-attachment-preview-button is-disabled">
-          <PaperClipOutlined />
-          <span>{attachment.fileName}</span>
-          <Text type="secondary">{meta}</Text>
-        </div>
-      </div>
-    );
-  }
+  const canOpen = Boolean(attachment.fileUrl);
 
   return (
     <div className="task-attachment-item">
-      <Tooltip title="ダウンロード">
-        <Button
-          href={`/api/attachments/${attachment.id}/download`}
-          icon={<DownloadOutlined />}
-          size="small"
-        />
-      </Tooltip>
-      <button
-        className="task-attachment-preview-button"
-        onClick={() => onPreview(attachment)}
-        type="button"
-      >
+      <div className="task-attachment-info">
         <PaperClipOutlined />
         <span>{attachment.fileName}</span>
         <Text type="secondary">{meta}</Text>
-      </button>
+      </div>
+      <Space className="task-attachment-actions" size={6}>
+        <Tooltip title="プレビュー">
+          <Button
+            disabled={!canOpen}
+            icon={<EyeOutlined />}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+
+              if (canOpen) {
+                onPreview(attachment);
+              }
+            }}
+            size="small"
+          />
+        </Tooltip>
+        <Tooltip title="ダウンロード">
+          <Button
+            disabled={!canOpen}
+            href={canOpen ? `/api/attachments/${attachment.id}/download` : undefined}
+            icon={<DownloadOutlined />}
+            onClick={(event) => event.stopPropagation()}
+            size="small"
+          />
+        </Tooltip>
+      </Space>
     </div>
   );
 }
