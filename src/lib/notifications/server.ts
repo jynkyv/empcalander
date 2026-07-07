@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type TaskNotificationType = "comment" | "done";
+export type TaskNotificationType = "assigned" | "comment" | "done";
 
 type TaskNotificationSource = {
   created_by: string;

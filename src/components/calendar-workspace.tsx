@@ -179,7 +179,7 @@ type TaskAttachmentSummary = {
   fileNames: string[];
 };
 
-type TaskNotificationType = "comment" | "done";
+type TaskNotificationType = "assigned" | "comment" | "done";
 
 type TaskNotification = {
   actorColor: string;
@@ -613,22 +613,20 @@ export function CalendarWorkspace({
         setUsers(workspaceUsers.length > 0 ? workspaceUsers : [currentProfile]);
       }
 
-      const { data: taskRows, error: tasksError } = await supabase
-        .from("tasks")
-        .select(
-          "id,title,description,starts_at,ends_at,status,priority,created_by,task_assignees(user_id)",
-        )
-        .order("starts_at", { ascending: true })
-        .returns<TaskRow[]>();
+      const tasksResponse = await fetch("/api/tasks", { cache: "no-store" });
+      const tasksPayload = (await tasksResponse.json()) as {
+        error?: string;
+        tasks?: TaskRow[];
+      };
 
       if (!isCurrentRequest()) return;
 
-      if (tasksError) {
-        setWorkspaceError(tasksError.message);
+      if (!tasksResponse.ok) {
+        setWorkspaceError(tasksPayload.error || "タスク一覧の読み込みに失敗しました");
         setTasks([]);
         setTaskAttachmentSummary({});
       } else {
-        setTasks((taskRows || []).map(taskRowToTask));
+        setTasks((tasksPayload.tasks || []).map(taskRowToTask));
 
         const { data: attachmentRows } = await supabase
           .from("task_attachments")
@@ -865,7 +863,7 @@ export function CalendarWorkspace({
   };
 
   const createTask = async (values: TaskFormValues) => {
-    if (!supabase || !currentUserId || taskSubmitting) return;
+    if (!currentUserId || taskSubmitting) return;
 
     const [start, end] = values.range;
     const assigneeIds = Array.from(new Set(values.assigneeIds));
@@ -878,49 +876,31 @@ export function CalendarWorkspace({
     setTaskSubmitting(true);
 
     try {
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert({
-          title: values.title,
-          description: values.description || "補足説明はありません。",
-          starts_at: start.toISOString(),
-          ends_at: end.toISOString(),
-          status: "todo",
+      const response = await fetch("/api/tasks", {
+        body: JSON.stringify({
+          assigneeIds,
+          description: values.description,
+          endsAt: end.toISOString(),
           priority: values.priority,
-          created_by: currentUserId,
-        })
-        .select("id")
-        .single<{ id: string }>();
+          startsAt: start.toISOString(),
+          title: values.title,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        task?: { id: string };
+      };
 
-      if (error || !data) {
-        message.error(error?.message || "タスクの作成に失敗しました");
-        return;
-      }
-
-      const assigneeRows = assigneeIds.map((userId) => ({
-        task_id: data.id,
-        user_id: userId,
-        assigned_by: currentUserId,
-      }));
-
-      const { error: assigneeError } = await supabase
-        .from("task_assignees")
-        .insert(assigneeRows);
-
-      if (assigneeError) {
-        await supabase
-          .from("tasks")
-          .delete()
-          .eq("id", data.id)
-          .eq("created_by", currentUserId);
-
-        message.error(assigneeError.message);
+      if (!response.ok || !payload.task) {
+        message.error(payload.error || "タスクの作成に失敗しました");
         return;
       }
 
       const attachmentsUploaded =
         taskDraftAttachments.length === 0 ||
-        (await addTaskComment(data.id, "", taskDraftAttachments, {
+        (await addTaskComment(payload.task.id, "", taskDraftAttachments, {
           refresh: false,
           successMessage: false,
         }));
@@ -1680,6 +1660,10 @@ function MonthRangeCalendar({
 }
 
 function notificationText(notification: TaskNotification) {
+  if (notification.type === "assigned") {
+    return `${notification.actorName} が「${notification.taskTitle}」を依頼しました`;
+  }
+
   if (notification.type === "done") {
     return `${notification.actorName} が「${notification.taskTitle}」を完了しました`;
   }

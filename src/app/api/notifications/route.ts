@@ -3,6 +3,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { TaskNotificationType } from "@/lib/notifications/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type NotificationRow = {
   id: string;
   task_id: string;
@@ -24,13 +27,20 @@ type ProfileRow = {
   id: string;
 };
 
+const noStoreHeaders = {
+  "Cache-Control": "no-store, max-age=0",
+};
+
 export async function GET() {
   const supabase = await createClient();
   const claims = await supabase.auth.getClaims();
   const userId = claims.data?.claims.sub;
 
   if (claims.error || !userId) {
-    return NextResponse.json({ error: "認証が必要です。" }, { status: 401 });
+    return NextResponse.json(
+      { error: "認証が必要です。" },
+      { headers: noStoreHeaders, status: 401 },
+    );
   }
 
   const admin = createAdminClient();
@@ -38,7 +48,7 @@ export async function GET() {
   if (!admin) {
     return NextResponse.json(
       { error: "Supabase 管理用の環境変数が不足しています。" },
-      { status: 500 },
+      { headers: noStoreHeaders, status: 500 },
     );
   }
 
@@ -52,7 +62,10 @@ export async function GET() {
     .returns<NotificationRow[]>();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { error: error.message },
+      { headers: noStoreHeaders, status: 400 },
+    );
   }
 
   const rows = data || [];
@@ -75,21 +88,24 @@ export async function GET() {
   const taskById = new Map((tasks || []).map((task) => [task.id, task]));
   const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
 
-  return NextResponse.json({
-    notifications: rows.map((row) => {
-      const actor = row.actor_id ? profileById.get(row.actor_id) : null;
+  return NextResponse.json(
+    {
+      notifications: rows.map((row) => {
+        const actor = row.actor_id ? profileById.get(row.actor_id) : null;
 
-      return {
-        actorColor: actor?.color || "#8a94a6",
-        actorId: row.actor_id,
-        actorName: actor?.full_name || actor?.email || "不明",
-        commentId: row.comment_id,
-        createdAt: row.created_at,
-        id: row.id,
-        taskId: row.task_id,
-        taskTitle: taskById.get(row.task_id)?.title || "タスク",
-        type: row.type,
-      };
-    }),
-  });
+        return {
+          actorColor: actor?.color || "#8a94a6",
+          actorId: row.actor_id,
+          actorName: actor?.full_name || actor?.email || "不明",
+          commentId: row.comment_id,
+          createdAt: row.created_at,
+          id: row.id,
+          taskId: row.task_id,
+          taskTitle: taskById.get(row.task_id)?.title || "タスク",
+          type: row.type,
+        };
+      }),
+    },
+    { headers: noStoreHeaders },
+  );
 }

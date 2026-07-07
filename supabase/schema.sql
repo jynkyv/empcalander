@@ -74,11 +74,18 @@ create table if not exists public.task_notifications (
   task_id uuid not null references public.tasks(id) on delete cascade,
   recipient_id uuid not null references public.profiles(id) on delete cascade,
   actor_id uuid references public.profiles(id) on delete set null,
-  type text not null check (type in ('comment', 'done')),
+  type text not null check (type in ('assigned', 'comment', 'done')),
   comment_id uuid references public.task_comments(id) on delete cascade,
   read_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.task_notifications
+drop constraint if exists task_notifications_type_check;
+
+alter table public.task_notifications
+add constraint task_notifications_type_check
+check (type in ('assigned', 'comment', 'done'));
 
 create index if not exists tasks_starts_at_idx on public.tasks(starts_at);
 create index if not exists tasks_created_by_idx on public.tasks(created_by);
