@@ -99,9 +99,26 @@ function normalizeBaseUrl(value?: string) {
   const trimmed = value.trim().replace(/\/$/, "");
 
   if (!trimmed) return "";
-  if (/^https?:\/\//.test(trimmed)) return trimmed;
 
-  return `https://${trimmed}`;
+  try {
+    const url = new URL(/^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`);
+
+    if (!isValidHostname(url.hostname)) {
+      return "";
+    }
+
+    return `${url.protocol}//${url.hostname}`;
+  } catch {
+    return "";
+  }
+}
+
+function isValidHostname(hostname: string) {
+  if (!hostname.includes(".")) return false;
+
+  return hostname.split(".").every((label) =>
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label),
+  );
 }
 
 export function getOssConfig(): OssConfig | null {
@@ -236,4 +253,26 @@ export async function uploadFileToOss(taskId: string, file: File) {
     mimeType: contentType,
     ossObjectKey: objectKey,
   } satisfies UploadedOssFile;
+}
+
+export function getOssPublicFileUrl(objectKey?: string | null) {
+  if (!objectKey) return null;
+
+  const config = getOssConfig();
+
+  if (!config) return null;
+
+  return `${config.publicBaseUrl}/${encodeObjectKey(objectKey)}`;
+}
+
+export function isUsablePublicFileUrl(fileUrl?: string | null) {
+  if (!fileUrl) return false;
+
+  try {
+    const url = new URL(fileUrl);
+
+    return isValidHostname(url.hostname);
+  } catch {
+    return false;
+  }
 }

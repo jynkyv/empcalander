@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  getOssPublicFileUrl,
+  isUsablePublicFileUrl,
+} from "@/lib/oss/upload";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireTaskAccess } from "@/lib/tasks/server-access";
+
+export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{ taskId: string }>;
@@ -51,5 +57,12 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ attachments: data || [] });
+  const attachments = (data || []).map((attachment) => ({
+    ...attachment,
+    file_url: isUsablePublicFileUrl(attachment.file_url)
+      ? attachment.file_url
+      : getOssPublicFileUrl(attachment.oss_object_key),
+  }));
+
+  return NextResponse.json({ attachments });
 }
