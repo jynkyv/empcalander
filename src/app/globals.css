@@ -172,7 +172,7 @@ select {
 .content-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1fr) clamp(292px, 27vw, 340px);
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 30vw, 420px);
   padding: 16px;
 }
 
@@ -814,36 +814,6 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@container (max-width: 320px) {
-  .detail-panel {
-    padding: 14px;
-  }
-
-  .task-card {
-    padding: 12px 12px 11px 14px;
-  }
-
-  .task-card-header,
-  .task-card-footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .task-card-header .ant-space,
-  .task-card-assignees {
-    justify-content: flex-start;
-  }
-
-  .task-card-header .ant-space {
-    flex-wrap: wrap;
-  }
-
-  .task-card-assignees,
-  .task-card-creator {
-    width: 100%;
-  }
 }
 
 .notification-panel {
