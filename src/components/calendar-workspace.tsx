@@ -812,9 +812,12 @@ export function CalendarWorkspace({
     [calendarValue, visibleTasks],
   );
 
+  const doingCount = monthTasks.filter((task) => task.status === "doing").length;
   const doneCount = monthTasks.filter((task) => task.status === "done").length;
   const completion =
-    monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
+    monthTasks.length === 0
+      ? 0
+      : Math.round(((doneCount + doingCount * 0.5) / monthTasks.length) * 100);
   const sentMonthCount = monthTasks.filter((task) => isSentTask(task, currentUserId)).length;
   const receivedMonthCount = monthTasks.filter((task) =>
     isReceivedTask(task, currentUserId),
@@ -1263,6 +1266,7 @@ export function CalendarWorkspace({
           <Progress percent={completion} size="small" strokeColor="#17a765" />
           <div className="summary-row">
             <span>今月のタスク {monthTasks.length}</span>
+            <span>進行中 {doingCount}</span>
             <span>完了 {doneCount}</span>
           </div>
           <div className="relation-summary-row">
