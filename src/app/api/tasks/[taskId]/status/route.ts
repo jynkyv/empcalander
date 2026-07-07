@@ -12,7 +12,7 @@ type UpdateStatusBody = {
   status?: TaskStatus;
 };
 
-const taskStatuses: TaskStatus[] = ["todo", "doing", "done"];
+const taskStatuses: TaskStatus[] = ["todo", "done"];
 
 export async function PATCH(request: Request, context: RouteContext) {
   const admin = createAdminClient();
@@ -43,6 +43,18 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (status === access.task.status) {
     return NextResponse.json({ task: { id: taskId, status } });
+  }
+
+  if (
+    status === "todo" &&
+    access.task.status === "done" &&
+    !access.isAdmin &&
+    access.task.created_by !== access.userId
+  ) {
+    return NextResponse.json(
+      { error: "完了したタスクを差し戻せるのは依頼者のみです。" },
+      { status: 403 },
+    );
   }
 
   const shouldNotifyCompletion = status === "done";

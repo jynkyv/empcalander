@@ -70,17 +70,17 @@ const { Text, Title } = Typography;
 dayjs.locale("ja");
 
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-const statusFlow: TaskStatus[] = ["todo", "doing", "done"];
 
 type CalendarScope = "all" | "sent" | "received";
+type CalendarStatusFilter = "all" | TaskStatus;
 type TaskRelation = "sent" | "received";
+type RawTaskStatus = TaskStatus | "doing";
 
 const statusMeta: Record<
   TaskStatus,
   { label: string; color: string }
 > = {
-  todo: { label: "未着手", color: "#7f56d9" },
-  doing: { label: "進行中", color: "#2f6fed" },
+  todo: { label: "未処理", color: "#7f56d9" },
   done: { label: "完了", color: "#17a765" },
 };
 
@@ -95,6 +95,17 @@ const prioritySignalColor: Record<TaskPriority, string> = {
   normal: "#2f6fed",
   high: "#e5484d",
 };
+
+const taskColorPalette = [
+  { color: "#2f6fed", mid: "#dce9ff", soft: "#eef5ff" },
+  { color: "#17a765", mid: "#dff6e9", soft: "#f0fbf5" },
+  { color: "#e5484d", mid: "#ffe1e3", soft: "#fff3f3" },
+  { color: "#7f56d9", mid: "#eadfff", soft: "#f7f2ff" },
+  { color: "#0891b2", mid: "#d7f4fb", soft: "#effbfe" },
+  { color: "#dc6803", mid: "#fde7c8", soft: "#fff7ed" },
+  { color: "#0f766e", mid: "#ccfbf1", soft: "#effdfa" },
+  { color: "#c026d3", mid: "#f5d0fe", soft: "#fdf4ff" },
+];
 
 const relationMeta: Record<
   TaskRelation,
@@ -142,7 +153,7 @@ type TaskRow = {
   description: string | null;
   starts_at: string;
   ends_at: string | null;
-  status: TaskStatus;
+  status: RawTaskStatus;
   priority: TaskPriority;
   created_by: string;
   task_assignees?: { user_id: string }[] | null;
@@ -316,6 +327,17 @@ function layoutWeekTasks(
   return { hiddenByDay, visible };
 }
 
+function taskColor(task: CalendarTask) {
+  const source = task.id || task.title;
+  let hash = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+
+  return taskColorPalette[hash % taskColorPalette.length];
+}
+
 function profileToUser(profile: ProfileRow): CalendarUser {
   return {
     id: profile.id,
@@ -333,7 +355,7 @@ function taskRowToTask(task: TaskRow): CalendarTask {
     description: task.description || "補足説明はありません。",
     startsAt: task.starts_at,
     endsAt: task.ends_at || undefined,
-    status: task.status,
+    status: task.status === "done" ? "done" : "todo",
     priority: task.priority,
     createdBy: task.created_by,
     assigneeIds: (task.task_assignees || []).map((assignee) => assignee.user_id),
@@ -524,6 +546,8 @@ export function CalendarWorkspace({
   const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs());
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [calendarScope, setCalendarScope] = useState<CalendarScope>("all");
+  const [calendarStatusFilter, setCalendarStatusFilter] =
+    useState<CalendarStatusFilter>("all");
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskDraftAttachments, setTaskDraftAttachments] = useState<
     CommentAttachmentDraft[]
@@ -795,10 +819,17 @@ export function CalendarWorkspace({
 
   const visibleTasks = useMemo(
     () =>
-      tasks.filter((task) =>
-        taskMatchesScope(task, calendarScope, currentUserId, Boolean(canManageAccounts)),
+      tasks.filter(
+        (task) =>
+          taskMatchesScope(
+            task,
+            calendarScope,
+            currentUserId,
+            Boolean(canManageAccounts),
+          ) &&
+          (calendarStatusFilter === "all" || task.status === calendarStatusFilter),
       ),
-    [calendarScope, canManageAccounts, currentUserId, tasks],
+    [calendarScope, calendarStatusFilter, canManageAccounts, currentUserId, tasks],
   );
   const unreadNotifications = useMemo(
     () => notifications.filter((notification) => !notification.readAt),
@@ -831,12 +862,10 @@ export function CalendarWorkspace({
     [calendarValue, visibleTasks],
   );
 
-  const doingCount = monthTasks.filter((task) => task.status === "doing").length;
+  const todoCount = monthTasks.filter((task) => task.status === "todo").length;
   const doneCount = monthTasks.filter((task) => task.status === "done").length;
   const completion =
-    monthTasks.length === 0
-      ? 0
-      : Math.round(((doneCount + doingCount * 0.5) / monthTasks.length) * 100);
+    monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
   const sentMonthCount = monthTasks.filter((task) => isSentTask(task, currentUserId)).length;
   const receivedMonthCount = monthTasks.filter((task) =>
     isReceivedTask(task, currentUserId),
@@ -1262,15 +1291,28 @@ export function CalendarWorkspace({
                 今日
               </Button>
             </Flex>
-            <Segmented
-              onChange={(value) => setCalendarScope(value as CalendarScope)}
-              options={[
-                { label: "すべて", value: "all" },
-                { label: "自分が依頼", value: "sent" },
-                { label: "自分宛て", value: "received" },
-              ]}
-              value={calendarScope}
-            />
+            <Space size={8} wrap>
+              <Segmented
+                onChange={(value) => setCalendarScope(value as CalendarScope)}
+                options={[
+                  { label: "すべて", value: "all" },
+                  { label: "自分が依頼", value: "sent" },
+                  { label: "自分宛て", value: "received" },
+                ]}
+                value={calendarScope}
+              />
+              <Segmented
+                onChange={(value) =>
+                  setCalendarStatusFilter(value as CalendarStatusFilter)
+                }
+                options={[
+                  { label: "すべて", value: "all" },
+                  { label: "未処理", value: "todo" },
+                  { label: "完了", value: "done" },
+                ]}
+                value={calendarStatusFilter}
+              />
+            </Space>
           </div>
 
           <MonthRangeCalendar
@@ -1297,7 +1339,7 @@ export function CalendarWorkspace({
           <Progress percent={completion} size="small" strokeColor="#17a765" />
           <div className="summary-row">
             <span>今月のタスク {monthTasks.length}</span>
-            <span>進行中 {doingCount}</span>
+            <span>未処理 {todoCount}</span>
             <span>完了 {doneCount}</span>
           </div>
           <div className="relation-summary-row">
@@ -1551,7 +1593,7 @@ function MonthRangeCalendar({
   unreadCountByTaskId: Record<string, number>;
   weeks: Dayjs[][];
 }) {
-  const visibleWeekEventCount = 3;
+  const visibleWeekEventCount = 4;
 
   return (
     <div className="range-calendar">
@@ -1620,10 +1662,10 @@ function MonthRangeCalendar({
             <div className="range-event-layer">
               {visible.map(({ lane, segment, task }) => {
                 const relation = relationForTask(task, currentUserId);
-                const relationStyle = relationMeta[relation];
                 const relationLabel = relationLabelForTask(task, currentUserId);
                 const priority = priorityMeta[task.priority];
                 const priorityColor = prioritySignalColor[task.priority];
+                const eventColor = taskColor(task);
                 const unreadCount = unreadCountByTaskId[task.id] || 0;
 
                 return (
@@ -1641,9 +1683,9 @@ function MonthRangeCalendar({
                       onSelectTask(task);
                     }}
                     style={{
-                      "--event-color": relationStyle.color,
-                      "--event-mid": relationStyle.mid,
-                      "--event-soft": relationStyle.soft,
+                      "--event-color": eventColor.color,
+                      "--event-mid": eventColor.mid,
+                      "--event-soft": eventColor.soft,
                       gridColumn: `${segment.startColumn} / span ${segment.span}`,
                       gridRow: lane + 1,
                     } as CSSProperties}
@@ -1670,23 +1712,30 @@ function MonthRangeCalendar({
               })}
             </div>
             <div className="range-more-layer">
-              {hiddenByDay.map((count, dayIndex) =>
-                count > 0 ? (
-                  <Text
+              {hiddenByDay.map((count, dayIndex) => {
+                const date = weekStart.add(dayIndex, "day");
+
+                return count > 0 ? (
+                  <button
                     className="range-more-count"
                     key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectDate(date);
+                    }}
                     style={{ gridColumn: dayIndex + 1 }}
-                    type="secondary"
+                    title={`${date.format("M月D日")} の未表示タスク ${count}件`}
+                    type="button"
                   >
                     +{count}件
-                  </Text>
+                  </button>
                 ) : (
                   <span
                     aria-hidden="true"
                     key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
                   />
-                ),
-              )}
+                );
+              })}
             </div>
           </div>
         );
@@ -1794,7 +1843,7 @@ function TaskDetailCard({
 
   return (
     <button
-      className={`task-card task-card-button relation-${relation}`}
+      className={`task-card task-card-button relation-${relation} is-${task.status}`}
       onClick={() => onOpen(task)}
       type="button"
     >
@@ -1906,9 +1955,8 @@ function TaskActionModal({
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
   const canDelete = task.createdBy === currentUserId;
-  const currentStatusIndex = statusFlow.indexOf(task.status);
-  const previousStatus = statusFlow[currentStatusIndex - 1];
-  const nextStatus = statusFlow[currentStatusIndex + 1];
+  const canComplete = task.status === "todo";
+  const canReject = task.status === "done" && task.createdBy === currentUserId;
   const statusChanging = Boolean(statusUpdating);
   const attachmentsByCommentId = new Map<string, TaskAttachment[]>();
 
@@ -1968,39 +2016,25 @@ function TaskActionModal({
               </Button>
             </Popconfirm>
           ) : null}
-          <Tooltip
-            title={
-              previousStatus
-                ? `${statusMeta[previousStatus].label}に戻す`
-                : "最初の状態です"
-            }
-          >
+          {canReject ? (
             <Button
-              disabled={!previousStatus || statusChanging}
-              icon={<LeftOutlined />}
-              loading={statusUpdating === previousStatus}
-              onClick={() => previousStatus && onStatusChange(task.id, previousStatus)}
+              disabled={statusChanging}
+              loading={statusUpdating === "todo"}
+              onClick={() => onStatusChange(task.id, "todo")}
             >
-              戻す
+              差し戻し
             </Button>
-          </Tooltip>
-          <Tooltip
-            title={
-              nextStatus
-                ? `${statusMeta[nextStatus].label}に進める`
-                : "完了済みです"
-            }
-          >
+          ) : null}
+          {canComplete ? (
             <Button
-              disabled={!nextStatus || statusChanging}
-              icon={<RightOutlined />}
-              loading={statusUpdating === nextStatus}
-              onClick={() => nextStatus && onStatusChange(task.id, nextStatus)}
+              disabled={statusChanging}
+              loading={statusUpdating === "done"}
+              onClick={() => onStatusChange(task.id, "done")}
               type="primary"
             >
-              進める
+              完了
             </Button>
-          </Tooltip>
+          ) : null}
         </Space>
       }
       onCancel={onClose}
