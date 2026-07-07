@@ -13,6 +13,7 @@ type NotificationRow = {
   type: TaskNotificationType;
   comment_id: string | null;
   created_at: string;
+  read_at: string | null;
 };
 
 type TaskTitleRow = {
@@ -54,11 +55,10 @@ export async function GET() {
 
   const { data, error } = await admin
     .from("task_notifications")
-    .select("id,task_id,actor_id,type,comment_id,created_at")
+    .select("id,task_id,actor_id,type,comment_id,created_at,read_at")
     .eq("recipient_id", userId)
-    .is("read_at", null)
     .order("created_at", { ascending: false })
-    .limit(50)
+    .limit(100)
     .returns<NotificationRow[]>();
 
   if (error) {
@@ -100,6 +100,7 @@ export async function GET() {
           commentId: row.comment_id,
           createdAt: row.created_at,
           id: row.id,
+          readAt: row.read_at,
           taskId: row.task_id,
           taskTitle: taskById.get(row.task_id)?.title || "タスク",
           type: row.type,

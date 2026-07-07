@@ -25,9 +25,10 @@ export async function PATCH(_request: Request, context: RouteContext) {
   }
 
   const { taskId } = await context.params;
+  const readAt = new Date().toISOString();
   const { error } = await admin
     .from("task_notifications")
-    .update({ read_at: new Date().toISOString() })
+    .update({ read_at: readAt })
     .eq("recipient_id", userId)
     .eq("task_id", taskId)
     .is("read_at", null);
@@ -36,5 +37,5 @@ export async function PATCH(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, readAt });
 }

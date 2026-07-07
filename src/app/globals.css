@@ -832,6 +832,15 @@ select {
   border-color: #cbd7ec;
 }
 
+.notification-item.is-read {
+  background: #f8fafc;
+}
+
+.notification-item.is-read .notification-title {
+  color: #667085;
+  font-weight: 600;
+}
+
 .notification-title {
   color: #172033;
   font-weight: 700;
@@ -840,9 +849,13 @@ select {
   white-space: nowrap;
 }
 
-.notification-time {
+.notification-meta {
+  align-items: center;
   color: #98a2b3;
+  display: flex;
   font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
   margin-top: 4px;
 }
 

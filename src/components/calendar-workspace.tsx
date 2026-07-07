@@ -189,6 +189,7 @@ type TaskNotification = {
   commentId?: string;
   createdAt: string;
   id: string;
+  readAt?: string | null;
   taskId: string;
   taskTitle: string;
   type: TaskNotificationType;
@@ -785,14 +786,18 @@ export function CalendarWorkspace({
       ),
     [calendarScope, canManageAccounts, currentUserId, tasks],
   );
+  const unreadNotifications = useMemo(
+    () => notifications.filter((notification) => !notification.readAt),
+    [notifications],
+  );
   const unreadCountByTaskId = useMemo(
     () =>
-      notifications.reduce<Record<string, number>>((counts, notification) => {
+      unreadNotifications.reduce<Record<string, number>>((counts, notification) => {
         counts[notification.taskId] = (counts[notification.taskId] || 0) + 1;
 
         return counts;
       }, {}),
-    [notifications],
+    [unreadNotifications],
   );
 
   const selectedTasks = useMemo(
@@ -1087,8 +1092,14 @@ export function CalendarWorkspace({
   const markTaskNotificationsRead = async (taskId: string) => {
     if (!unreadCountByTaskId[taskId]) return;
 
+    const fallbackReadAt = new Date().toISOString();
+
     setNotifications((current) =>
-      current.filter((notification) => notification.taskId !== taskId),
+      current.map((notification) =>
+        notification.taskId === taskId && !notification.readAt
+          ? { ...notification, readAt: fallbackReadAt }
+          : notification,
+      ),
     );
 
     try {
@@ -1175,12 +1186,13 @@ export function CalendarWorkspace({
               <NotificationPanel
                 notifications={notifications}
                 onOpenTask={openNotificationTask}
+                unreadCount={unreadNotifications.length}
               />
             }
             placement="bottomRight"
             trigger="click"
           >
-            <Badge count={notifications.length} size="small">
+            <Badge count={unreadNotifications.length} size="small">
               <Button icon={<BellOutlined />}>通知</Button>
             </Badge>
           </Popover>
@@ -1679,23 +1691,27 @@ function notificationText(notification: TaskNotification) {
 function NotificationPanel({
   notifications,
   onOpenTask,
+  unreadCount,
 }: {
   notifications: TaskNotification[];
   onOpenTask: (taskId: string) => void;
+  unreadCount: number;
 }) {
   return (
     <div className="notification-panel">
       <div className="notification-panel-header">
         <Text strong>通知</Text>
-        <Text type="secondary">{notifications.length}件</Text>
+        <Text type="secondary">
+          未読 {unreadCount} / 全 {notifications.length}
+        </Text>
       </div>
       {notifications.length === 0 ? (
-        <Empty description="未読通知はありません" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description="通知はありません" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <div className="notification-list">
           {notifications.map((notification) => (
             <button
-              className="notification-item"
+              className={`notification-item ${notification.readAt ? "is-read" : "is-unread"}`}
               key={notification.id}
               onClick={() => onOpenTask(notification.taskId)}
               type="button"
@@ -1707,8 +1723,11 @@ function NotificationPanel({
                 <div className="notification-title">
                   {notificationText(notification)}
                 </div>
-                <div className="notification-time">
-                  {dayjs(notification.createdAt).format("M月D日 HH:mm")}
+                <div className="notification-meta">
+                  <span>{dayjs(notification.createdAt).format("M月D日 HH:mm")}</span>
+                  <Tag color={notification.readAt ? "default" : "red"}>
+                    {notification.readAt ? "既読" : "未読"}
+                  </Tag>
                 </div>
               </div>
             </button>
