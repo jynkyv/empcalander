@@ -716,6 +716,13 @@ select {
   white-space: pre-wrap;
 }
 
+.task-comment-attachments,
+.task-pending-attachment-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .task-attachment-item {
   align-items: center;
   border: 1px solid #edf0f6;
@@ -728,16 +735,39 @@ select {
   padding: 9px 10px;
 }
 
+.task-attachment-item:hover {
+  background: #f8fbff;
+}
+
 .task-attachment-item > span:nth-child(2) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-attachment-form {
+.task-pending-attachment-item {
+  align-items: center;
+  background: #fffdf7;
+  border: 1px dashed #f3c56b;
+  border-radius: 8px;
+  color: #172033;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1.2fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 8px 10px;
+}
+
+.task-pending-attachment-item > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-comment-compose-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .task-table,
@@ -890,8 +920,9 @@ code {
     flex-direction: column;
   }
 
-  .task-attachment-form {
-    grid-template-columns: 1fr;
+  .task-comment-compose-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .calendar-header {

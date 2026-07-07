@@ -14,7 +14,16 @@ type CommentRow = {
   created_at: string;
 };
 
+type CreateCommentAttachmentBody = {
+  fileName?: string;
+  fileSize?: number;
+  fileUrl?: string;
+  mimeType?: string;
+  ossObjectKey?: string;
+};
+
 type CreateCommentBody = {
+  attachments?: CreateCommentAttachmentBody[];
   body?: string;
 };
 
@@ -68,10 +77,19 @@ export async function POST(request: Request, context: RouteContext) {
 
   const body = (await request.json()) as CreateCommentBody;
   const commentBody = body.body?.trim();
+  const attachments = (body.attachments || [])
+    .map((attachment) => ({
+      fileName: attachment.fileName?.trim(),
+      fileSize: attachment.fileSize,
+      fileUrl: attachment.fileUrl?.trim(),
+      mimeType: attachment.mimeType?.trim(),
+      ossObjectKey: attachment.ossObjectKey?.trim(),
+    }))
+    .filter((attachment) => attachment.fileName);
 
-  if (!commentBody) {
+  if (!commentBody && attachments.length === 0) {
     return NextResponse.json(
-      { error: "コメントを入力してください。" },
+      { error: "コメントまたは添付ファイルを入力してください。" },
       { status: 400 },
     );
   }
@@ -80,7 +98,7 @@ export async function POST(request: Request, context: RouteContext) {
     .from("task_comments")
     .insert({
       author_id: access.userId,
-      body: commentBody,
+      body: commentBody || "",
       task_id: taskId,
     })
     .select("id,task_id,author_id,body,created_at")
@@ -91,6 +109,26 @@ export async function POST(request: Request, context: RouteContext) {
       { error: error?.message || "コメントの追加に失敗しました。" },
       { status: 400 },
     );
+  }
+
+  if (attachments.length > 0) {
+    const { error: attachmentError } = await admin.from("task_attachments").insert(
+      attachments.map((attachment) => ({
+        comment_id: data.id,
+        file_name: attachment.fileName,
+        file_size: attachment.fileSize,
+        file_url: attachment.fileUrl || null,
+        mime_type: attachment.mimeType || null,
+        oss_object_key: attachment.ossObjectKey || null,
+        task_id: taskId,
+        uploaded_by: access.userId,
+        upload_status: attachment.fileUrl ? "uploaded" : "pending",
+      })),
+    );
+
+    if (attachmentError) {
+      return NextResponse.json({ error: attachmentError.message }, { status: 400 });
+    }
   }
 
   return NextResponse.json({ comment: data });

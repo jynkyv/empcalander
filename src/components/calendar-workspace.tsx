@@ -23,7 +23,9 @@ import {
   Tag,
   Tooltip,
   Typography,
+  Upload,
 } from "antd";
+import type { UploadProps } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
@@ -34,6 +36,7 @@ import {
   PlusOutlined,
   RightOutlined,
   SendOutlined,
+  UploadOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -149,18 +152,22 @@ type TaskCommentRow = {
 type TaskAttachmentRow = {
   id: string;
   task_id: string;
+  comment_id: string;
   uploaded_by: string | null;
   file_name: string;
-  file_url: string;
+  file_url: string | null;
   file_size: number | null;
   mime_type: string | null;
   oss_object_key: string | null;
+  upload_status: "pending" | "uploaded";
   created_at: string;
 };
 
-type TaskAttachmentInput = {
+type CommentAttachmentDraft = {
+  fileSize?: number;
   fileName: string;
-  fileUrl: string;
+  mimeType?: string;
+  uid: string;
 };
 
 function startOfCalendarMonth(month: Dayjs) {
@@ -299,15 +306,17 @@ function commentRowToComment(comment: TaskCommentRow): TaskComment {
 
 function attachmentRowToAttachment(attachment: TaskAttachmentRow): TaskAttachment {
   return {
+    commentId: attachment.comment_id,
     createdAt: attachment.created_at,
     fileName: attachment.file_name,
     fileSize: attachment.file_size || undefined,
-    fileUrl: attachment.file_url,
+    fileUrl: attachment.file_url || undefined,
     id: attachment.id,
     mimeType: attachment.mime_type || undefined,
     ossObjectKey: attachment.oss_object_key || undefined,
     taskId: attachment.task_id,
     uploadedBy: attachment.uploaded_by || undefined,
+    uploadStatus: attachment.upload_status,
   };
 }
 
@@ -392,7 +401,6 @@ export function CalendarWorkspace({
   const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
   const [taskExtrasLoading, setTaskExtrasLoading] = useState(false);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const [attachmentSubmitting, setAttachmentSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskForm] = Form.useForm<TaskFormValues>();
@@ -758,18 +766,29 @@ export function CalendarWorkspace({
     }
   };
 
-  const addTaskComment = async (taskId: string, body: string) => {
+  const addTaskComment = async (
+    taskId: string,
+    body: string,
+    attachments: CommentAttachmentDraft[],
+  ) => {
     const commentBody = body.trim();
 
-    if (!commentBody) {
-      message.error("コメントを入力してください");
+    if (!commentBody && attachments.length === 0) {
+      message.error("コメントまたは添付ファイルを入力してください");
       return false;
     }
 
     setCommentSubmitting(true);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments`, {
-        body: JSON.stringify({ body: commentBody }),
+        body: JSON.stringify({
+          attachments: attachments.map((attachment) => ({
+            fileName: attachment.fileName,
+            fileSize: attachment.fileSize,
+            mimeType: attachment.mimeType,
+          })),
+          body: commentBody,
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
@@ -788,43 +807,6 @@ export function CalendarWorkspace({
       return false;
     } finally {
       setCommentSubmitting(false);
-    }
-  };
-
-  const addTaskAttachment = async (
-    taskId: string,
-    attachment: TaskAttachmentInput,
-  ) => {
-    const fileName = attachment.fileName.trim();
-    const fileUrl = attachment.fileUrl.trim();
-
-    if (!fileName || !fileUrl) {
-      message.error("ファイル名と URL を入力してください");
-      return false;
-    }
-
-    setAttachmentSubmitting(true);
-    try {
-      const response = await fetch(`/api/tasks/${taskId}/attachments`, {
-        body: JSON.stringify({ fileName, fileUrl }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const payload = (await response.json()) as { error?: string };
-
-      if (!response.ok) {
-        message.error(payload.error || "添付ファイルの登録に失敗しました");
-        return false;
-      }
-
-      await loadTaskExtras(taskId);
-      message.success("添付ファイルを登録しました");
-      return true;
-    } catch {
-      message.error("添付ファイルの登録に失敗しました");
-      return false;
-    } finally {
-      setAttachmentSubmitting(false);
     }
   };
 
@@ -1053,12 +1035,10 @@ export function CalendarWorkspace({
 
       <TaskActionModal
         attachments={taskAttachments}
-        attachmentSubmitting={attachmentSubmitting}
         comments={taskComments}
         commentSubmitting={commentSubmitting}
         key={activeTask?.id || "task-modal-closed"}
         onClose={closeTaskDetail}
-        onAddAttachment={addTaskAttachment}
         onAddComment={addTaskComment}
         onDelete={deleteTask}
         onStatusChange={updateTaskStatus}
@@ -1373,13 +1353,11 @@ function TaskDetailCard({
 
 function TaskActionModal({
   attachments,
-  attachmentSubmitting,
   comments,
   commentSubmitting,
   currentUserId,
   deleting,
   extrasLoading,
-  onAddAttachment,
   onAddComment,
   onDelete,
   onClose,
@@ -1388,17 +1366,16 @@ function TaskActionModal({
   userById,
 }: {
   attachments: TaskAttachment[];
-  attachmentSubmitting: boolean;
   comments: TaskComment[];
   commentSubmitting: boolean;
   currentUserId: string;
   deleting: boolean;
   extrasLoading: boolean;
-  onAddAttachment: (
+  onAddComment: (
     taskId: string,
-    attachment: TaskAttachmentInput,
+    body: string,
+    attachments: CommentAttachmentDraft[],
   ) => Promise<boolean>;
-  onAddComment: (taskId: string, body: string) => Promise<boolean>;
   onDelete: (task: CalendarTask) => void;
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
@@ -1406,8 +1383,9 @@ function TaskActionModal({
   userById: Map<string, CalendarUser>;
 }) {
   const [commentBody, setCommentBody] = useState("");
-  const [attachmentName, setAttachmentName] = useState("");
-  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<
+    CommentAttachmentDraft[]
+  >([]);
 
   if (!task) return null;
 
@@ -1421,22 +1399,38 @@ function TaskActionModal({
   const relationStyle = relationMeta[relation];
   const relationLabel = relationLabelForTask(task, currentUserId);
   const canDelete = task.createdBy === currentUserId;
+  const attachmentsByCommentId = new Map<string, TaskAttachment[]>();
+
+  attachments.forEach((attachment) => {
+    const commentAttachments = attachmentsByCommentId.get(attachment.commentId) || [];
+    commentAttachments.push(attachment);
+    attachmentsByCommentId.set(attachment.commentId, commentAttachments);
+  });
+
+  const uploadProps: UploadProps = {
+    beforeUpload: (file) => {
+      setPendingAttachments((current) => [
+        ...current,
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || undefined,
+          uid: file.uid,
+        },
+      ]);
+
+      return false;
+    },
+    fileList: [],
+    multiple: true,
+    showUploadList: false,
+  };
   const submitComment = async () => {
-    const created = await onAddComment(task.id, commentBody);
+    const created = await onAddComment(task.id, commentBody, pendingAttachments);
 
     if (created) {
       setCommentBody("");
-    }
-  };
-  const submitAttachment = async () => {
-    const created = await onAddAttachment(task.id, {
-      fileName: attachmentName,
-      fileUrl: attachmentUrl,
-    });
-
-    if (created) {
-      setAttachmentName("");
-      setAttachmentUrl("");
+      setPendingAttachments([]);
     }
   };
 
@@ -1513,6 +1507,8 @@ function TaskActionModal({
             ) : (
               comments.map((comment) => {
                 const author = userById.get(comment.authorId);
+                const commentAttachments =
+                  attachmentsByCommentId.get(comment.id) || [];
 
                 return (
                   <div className="task-comment-item" key={comment.id}>
@@ -1526,7 +1522,18 @@ function TaskActionModal({
                           {dayjs(comment.createdAt).format("M月D日 HH:mm")}
                         </Text>
                       </div>
-                      <p>{comment.body}</p>
+                      {comment.body ? <p>{comment.body}</p> : null}
+                      {commentAttachments.length > 0 ? (
+                        <div className="task-comment-attachments">
+                          {commentAttachments.map((attachment) => (
+                            <TaskAttachmentItem
+                              attachment={attachment}
+                              key={attachment.id}
+                              userById={userById}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -1539,78 +1546,86 @@ function TaskActionModal({
             rows={3}
             value={commentBody}
           />
-          <Button
-            icon={<SendOutlined />}
-            loading={commentSubmitting}
-            onClick={submitComment}
-            type="primary"
-          >
-            コメント追加
-          </Button>
-        </div>
-        <div className="task-action-section">
-          <div className="task-action-section-header">
-            <Text strong>添付ファイル</Text>
-            {extrasLoading ? <Spin size="small" /> : null}
-          </div>
-          <div className="task-attachment-list">
-            {attachments.length === 0 ? (
-              <Text type="secondary">添付ファイルはまだありません。</Text>
-            ) : (
-              attachments.map((attachment) => {
-                const uploader = attachment.uploadedBy
-                  ? userById.get(attachment.uploadedBy)
-                  : null;
-                const sizeLabel = formatFileSize(attachment.fileSize);
-
-                return (
-                  <a
-                    className="task-attachment-item"
-                    href={attachment.fileUrl}
-                    key={attachment.id}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <PaperClipOutlined />
-                    <span>{attachment.fileName}</span>
-                    <Text type="secondary">
-                      {[
-                        sizeLabel,
-                        uploader?.name,
-                        dayjs(attachment.createdAt).format("M月D日 HH:mm"),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </Text>
-                  </a>
-                );
-              })
-            )}
-          </div>
-          <div className="task-attachment-form">
-            <Input
-              onChange={(event) => setAttachmentName(event.target.value)}
-              placeholder="ファイル名"
-              value={attachmentName}
-            />
-            <Input
-              onChange={(event) => setAttachmentUrl(event.target.value)}
-              placeholder="OSS URL"
-              value={attachmentUrl}
-            />
+          {pendingAttachments.length > 0 ? (
+            <div className="task-pending-attachment-list">
+              {pendingAttachments.map((attachment) => (
+                <div className="task-pending-attachment-item" key={attachment.uid}>
+                  <PaperClipOutlined />
+                  <span>{attachment.fileName}</span>
+                  <Text type="secondary">{formatFileSize(attachment.fileSize)}</Text>
+                  <Button
+                    icon={<DeleteOutlined />}
+                    onClick={() =>
+                      setPendingAttachments((current) =>
+                        current.filter((item) => item.uid !== attachment.uid),
+                      )
+                    }
+                    size="small"
+                    type="text"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="task-comment-compose-actions">
+            <Upload {...uploadProps}>
+              <Button icon={<UploadOutlined />}>アップロード</Button>
+            </Upload>
             <Button
-              icon={<PaperClipOutlined />}
-              loading={attachmentSubmitting}
-              onClick={submitAttachment}
+              icon={<SendOutlined />}
+              loading={commentSubmitting}
+              onClick={submitComment}
+              type="primary"
             >
-              添付登録
+              送信
             </Button>
           </div>
           <Text type="secondary">
-            Aliyun OSS のアップロード連携後は、この添付登録に接続します。
+            Aliyun OSS 連携後は、このアップロードボタンに直アップロード処理を接続します。
           </Text>
         </div>
       </div>
     </Modal>
+  );
+}
+
+function TaskAttachmentItem({
+  attachment,
+  userById,
+}: {
+  attachment: TaskAttachment;
+  userById: Map<string, CalendarUser>;
+}) {
+  const uploader = attachment.uploadedBy ? userById.get(attachment.uploadedBy) : null;
+  const sizeLabel = formatFileSize(attachment.fileSize);
+  const meta = [
+    sizeLabel,
+    uploader?.name,
+    attachment.uploadStatus === "pending" ? "OSS 未連携" : null,
+    dayjs(attachment.createdAt).format("M月D日 HH:mm"),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const content = (
+    <>
+      <PaperClipOutlined />
+      <span>{attachment.fileName}</span>
+      <Text type="secondary">{meta}</Text>
+    </>
+  );
+
+  if (!attachment.fileUrl) {
+    return <div className="task-attachment-item">{content}</div>;
+  }
+
+  return (
+    <a
+      className="task-attachment-item"
+      href={attachment.fileUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {content}
+    </a>
   );
 }

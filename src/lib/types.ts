@@ -35,11 +35,13 @@ export type TaskComment = {
 export type TaskAttachment = {
   id: string;
   taskId: string;
+  commentId: string;
   uploadedBy?: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl?: string;
   fileSize?: number;
   mimeType?: string;
   ossObjectKey?: string;
+  uploadStatus: "pending" | "uploaded";
   createdAt: string;
 };
