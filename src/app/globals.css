@@ -284,17 +284,17 @@ select {
 
 .range-calendar {
   --calendar-day-font-size: 14px;
-  --calendar-day-padding-x: 14px;
-  --calendar-day-padding-y: 12px;
+  --calendar-day-padding-x: 12px;
+  --calendar-day-padding-y: 8px;
   --calendar-event-font-size: 12px;
-  --calendar-event-gap: 3px;
-  --calendar-event-height: 20px;
+  --calendar-event-gap: 2px;
+  --calendar-event-height: 18px;
   --calendar-event-margin-x: 8px;
-  --calendar-event-top: 35px;
-  --calendar-today-size: 24px;
-  --calendar-week-height: 150px;
+  --calendar-event-top: 32px;
+  --calendar-today-size: 22px;
+  --calendar-week-height: 124px;
   --calendar-weekday-font-size: 13px;
-  --calendar-weekday-height: 44px;
+  --calendar-weekday-height: 36px;
   background: #ffffff;
   display: flex;
   flex: 1;
@@ -362,17 +362,17 @@ select {
   border-radius: 999px;
   box-shadow: 0 4px 12px rgba(47, 111, 237, 0.1);
   color: #1d4ed8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 750;
   left: var(--calendar-event-margin-x);
-  line-height: 20px;
-  max-width: calc(100% - var(--calendar-event-margin-x) * 2 - 32px);
+  line-height: 16px;
+  max-width: calc(100% - var(--calendar-event-margin-x) * 2 - 44px);
   overflow: hidden;
-  padding: 0 9px;
+  padding: 0 7px;
   position: absolute;
   text-align: left;
   text-overflow: ellipsis;
-  top: 12px;
+  top: 8px;
   white-space: nowrap;
 }
 

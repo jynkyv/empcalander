@@ -850,24 +850,16 @@ export function CalendarWorkspace({
     [selectedDate, visibleTasks],
   );
 
-  const monthTasks = useMemo(
-    () =>
-      visibleTasks.filter((task) =>
-        taskIntersectsRange(
-          task,
-          calendarValue.startOf("month"),
-          calendarValue.endOf("month"),
-        ),
-      ),
-    [calendarValue, visibleTasks],
-  );
-
-  const todoCount = monthTasks.filter((task) => task.status === "todo").length;
-  const doneCount = monthTasks.filter((task) => task.status === "done").length;
-  const completion =
-    monthTasks.length === 0 ? 0 : Math.round((doneCount / monthTasks.length) * 100);
-  const sentMonthCount = monthTasks.filter((task) => isSentTask(task, currentUserId)).length;
-  const receivedMonthCount = monthTasks.filter((task) =>
+  const selectedTodoCount = selectedTasks.filter((task) => task.status === "todo").length;
+  const selectedDoneCount = selectedTasks.filter((task) => task.status === "done").length;
+  const selectedCompletion =
+    selectedTasks.length === 0
+      ? 0
+      : Math.round((selectedDoneCount / selectedTasks.length) * 100);
+  const selectedSentCount = selectedTasks.filter((task) =>
+    isSentTask(task, currentUserId),
+  ).length;
+  const selectedReceivedCount = selectedTasks.filter((task) =>
     isReceivedTask(task, currentUserId),
   ).length;
 
@@ -1336,15 +1328,15 @@ export function CalendarWorkspace({
             </div>
             <Button icon={<MoreOutlined />} onClick={() => openTaskModal(selectedDate)} />
           </div>
-          <Progress percent={completion} size="small" strokeColor="#17a765" />
+          <Progress percent={selectedCompletion} size="small" strokeColor="#17a765" />
           <div className="summary-row">
-            <span>今月のタスク {monthTasks.length}</span>
-            <span>未処理 {todoCount}</span>
-            <span>完了 {doneCount}</span>
+            <span>当日のタスク {selectedTasks.length}</span>
+            <span>未処理 {selectedTodoCount}</span>
+            <span>完了 {selectedDoneCount}</span>
           </div>
           <div className="relation-summary-row">
-            <span>依頼 {sentMonthCount}</span>
-            <span>受信 {receivedMonthCount}</span>
+            <span>依頼 {selectedSentCount}</span>
+            <span>受信 {selectedReceivedCount}</span>
           </div>
           <div className="task-detail-list">
             {selectedTasks.length === 0 ? (
