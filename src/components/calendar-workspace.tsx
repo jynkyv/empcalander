@@ -195,6 +195,11 @@ type TaskNotification = {
   type: TaskNotificationType;
 };
 
+type NotificationsPayload = {
+  error?: string;
+  notifications?: TaskNotification[];
+};
+
 type CommentAttachmentDraft = {
   file: File;
   fileSize?: number;
@@ -546,6 +551,23 @@ export function CalendarWorkspace({
   const currentUserId = currentUser?.id || "";
   const canManageAccounts = currentUser?.role === "admin";
 
+  const fetchNotifications = useCallback(async () => {
+    const response = await fetch(`/api/notifications?ts=${Date.now()}`, {
+      cache: "no-store",
+    });
+    const payload = (await response.json()) as NotificationsPayload;
+
+    if (!response.ok) {
+      throw new Error(payload.error || "通知の読み込みに失敗しました");
+    }
+
+    return payload.notifications || [];
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    setNotifications(await fetchNotifications());
+  }, [fetchNotifications]);
+
   const loadWorkspaceData = useCallback(async () => {
     if (!supabase) {
       setAuthLoading(false);
@@ -642,19 +664,11 @@ export function CalendarWorkspace({
       }
 
       try {
-        const notificationsResponse = await fetch("/api/notifications", {
-          cache: "no-store",
-        });
-        const notificationsPayload = (await notificationsResponse.json()) as {
-          error?: string;
-          notifications?: TaskNotification[];
-        };
+        const nextNotifications = await fetchNotifications();
 
         if (!isCurrentRequest()) return;
 
-        if (notificationsResponse.ok) {
-          setNotifications(notificationsPayload.notifications || []);
-        }
+        setNotifications(nextNotifications);
       } catch {
         // Notification fetch is non-blocking for the calendar itself.
       }
@@ -670,7 +684,7 @@ export function CalendarWorkspace({
         setDataLoading(false);
       }
     }
-  }, [supabase]);
+  }, [fetchNotifications, supabase]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1109,7 +1123,12 @@ export function CalendarWorkspace({
 
       if (!response.ok) {
         void loadWorkspaceData();
+        return;
       }
+
+      void loadNotifications().catch(() => {
+        void loadWorkspaceData();
+      });
     } catch {
       void loadWorkspaceData();
     }

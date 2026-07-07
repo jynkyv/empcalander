@@ -58,7 +58,7 @@ export async function GET() {
     .select("id,task_id,actor_id,type,comment_id,created_at,read_at")
     .eq("recipient_id", userId)
     .order("created_at", { ascending: false })
-    .limit(100)
+    .limit(500)
     .returns<NotificationRow[]>();
 
   if (error) {
