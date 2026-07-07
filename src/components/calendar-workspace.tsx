@@ -1593,7 +1593,7 @@ function MonthRangeCalendar({
   unreadCountByTaskId: Record<string, number>;
   weeks: Dayjs[][];
 }) {
-  const visibleWeekEventCount = 5;
+  const visibleWeekEventCount = 4;
 
   return (
     <div className="range-calendar">
@@ -1621,11 +1621,12 @@ function MonthRangeCalendar({
         return (
           <div className="range-calendar-week" key={weekStart.format("YYYY-MM-DD")}>
             <div className="range-calendar-days">
-              {week.map((date) => {
+              {week.map((date, dayIndex) => {
                 const isCurrentMonth = date.month() === calendarValue.month();
                 const isSelected = date.isSame(selectedDate, "day");
                 const isToday = date.isSame(dayjs(), "day");
                 const restDay = getJapanRestDay(date.format("YYYY-MM-DD"), date.day());
+                const hiddenCount = hiddenByDay[dayIndex];
 
                 return (
                   <button
@@ -1644,6 +1645,14 @@ function MonthRangeCalendar({
                     title={restDay.label || undefined}
                     type="button"
                   >
+                    {hiddenCount > 0 ? (
+                      <span
+                        className="range-day-more-count"
+                        title={`${date.format("M月D日")} の未表示タスク ${hiddenCount}件`}
+                      >
+                        +{hiddenCount}件
+                      </span>
+                    ) : null}
                     <span className="range-day-date">
                       <span className={isToday ? "today-number" : ""}>
                         {date.date()}
@@ -1708,32 +1717,6 @@ function MonthRangeCalendar({
                       </span>
                     ) : null}
                   </button>
-                );
-              })}
-            </div>
-            <div className="range-more-layer">
-              {hiddenByDay.map((count, dayIndex) => {
-                const date = weekStart.add(dayIndex, "day");
-
-                return count > 0 ? (
-                  <button
-                    className="range-more-count"
-                    key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelectDate(date);
-                    }}
-                    style={{ gridColumn: dayIndex + 1 }}
-                    title={`${date.format("M月D日")} の未表示タスク ${count}件`}
-                    type="button"
-                  >
-                    +{count}件
-                  </button>
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    key={`${weekStart.format("YYYY-MM-DD")}-${dayIndex}`}
-                  />
                 );
               })}
             </div>

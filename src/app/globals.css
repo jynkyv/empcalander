@@ -291,9 +291,8 @@ select {
   --calendar-event-height: 20px;
   --calendar-event-margin-x: 8px;
   --calendar-event-top: 35px;
-  --calendar-more-top: 132px;
   --calendar-today-size: 24px;
-  --calendar-week-height: 162px;
+  --calendar-week-height: 150px;
   --calendar-weekday-font-size: 13px;
   --calendar-weekday-height: 44px;
   background: #ffffff;
@@ -353,7 +352,28 @@ select {
   line-height: var(--calendar-today-size);
   min-width: 0;
   padding: var(--calendar-day-padding-y) var(--calendar-day-padding-x);
+  position: relative;
   text-align: right;
+}
+
+.range-day-more-count {
+  background: #eef4ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(47, 111, 237, 0.1);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 750;
+  left: var(--calendar-event-margin-x);
+  line-height: 20px;
+  max-width: calc(100% - var(--calendar-event-margin-x) * 2 - 32px);
+  overflow: hidden;
+  padding: 0 9px;
+  position: absolute;
+  text-align: left;
+  text-overflow: ellipsis;
+  top: 12px;
+  white-space: nowrap;
 }
 
 .range-day-date {
@@ -510,42 +530,6 @@ select {
   border-bottom-right-radius: 0;
   border-top-right-radius: 0;
   margin-right: 0;
-}
-
-.range-more-layer {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  left: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  top: var(--calendar-more-top);
-}
-
-.range-more-count {
-  background: #172033;
-  border: 1px solid rgba(23, 32, 51, 0.12);
-  border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.12);
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 750;
-  justify-self: start;
-  line-height: 20px;
-  margin: 0 0 0 var(--calendar-event-margin-x);
-  max-width: calc(100% - var(--calendar-event-margin-x) * 2);
-  overflow: hidden;
-  padding: 0 9px;
-  pointer-events: auto;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.range-more-count:hover {
-  background: #2f6fed;
-  color: #ffffff;
 }
 
 .calendar-header {
